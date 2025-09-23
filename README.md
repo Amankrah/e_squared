@@ -4,7 +4,7 @@
   
 **🚀 A Modern Cryptocurrency Trading Strategy Builder**
 
-*Trade Smart, Not Hard - Professional DCA Strategies Made Simple*
+*Trade, Don't Gamble - Professional Crypto Trading Strategies Made Simple*
 
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Next.js](https://img.shields.io/badge/Next-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -15,7 +15,7 @@
 
 ## 🎯 Overview
 
-E-Squared Trading is a comprehensive fullstack cryptocurrency trading platform that democratizes professional trading strategies. Built for beginners but powerful enough for experts, it features intelligent Dollar Cost Averaging (DCA) strategies that adapt to market conditions using sentiment analysis, volatility metrics, and advanced risk management.
+E-Squared Trading is a comprehensive fullstack cryptocurrency trading platform that democratizes professional trading strategies. Built for beginners but powerful enough for experts, it features a lot of trading strategies including intelligent Dollar Cost Averaging (DCA) strategies that adapt to market conditions using sentiment analysis, volatility metrics, and advanced risk management.
 
 ### ✨ Key Features
 
@@ -287,7 +287,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Documentation**: [docs/](./docs/)
 - **Issues**: [GitHub Issues](https://github.com/yourusername/e-squared-trading/issues)
 - **Discord**: [Join our community](https://discord.gg/e-squared)
-- **Email**: support@e-squaredtrading.com
+- **Email**: contact@esquaredtradings.com
 
 ---
 
