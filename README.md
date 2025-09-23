@@ -286,7 +286,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Documentation**: [docs/](./docs/)
 - **Issues**: [GitHub Issues](https://github.com/yourusername/e-squared-trading/issues)
-- **Discord**: [Join our community](https://discord.gg/e-squared)
+- **X**: [Join our community](https://x.com/esquaredtrading)
 - **Email**: contact@esquaredtradings.com
 
 ---
