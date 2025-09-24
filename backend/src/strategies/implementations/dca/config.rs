@@ -371,3 +371,9 @@ impl DCAConfig {
         })
     }
 }
+
+impl Default for DCAConfig {
+    fn default() -> Self {
+        Self::simple(Decimal::from(100), DCAFrequency::Daily(1))
+    }
+}

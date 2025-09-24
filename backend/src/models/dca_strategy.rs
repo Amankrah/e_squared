@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sea_orm::{entity::prelude::*};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -292,7 +291,7 @@ impl Model {
 
         let mut strategy = StrategyFrameworkDCA::new();
 
-        use crate::strategies::core::{StrategyMode, StrategyContextBuilder};
+        use crate::strategies::core::{Strategy, StrategyMode, StrategyContextBuilder};
         use rust_decimal::prelude::FromPrimitive;
 
         // Create context for strategy initialization
@@ -326,7 +325,8 @@ impl Model {
 
     /// Check if strategy should execute using strategy framework
     pub async fn should_execute(&self, historical_data: Vec<crate::exchange_connectors::Kline>) -> Result<bool, String> {
-        let strategy = self.to_strategy_framework(historical_data).await?;
+        let historical_data_clone = historical_data.clone();
+        let mut strategy = self.to_strategy_framework(historical_data_clone).await?;
 
         use crate::strategies::core::{StrategyContextBuilder, StrategyMode, Strategy};
         use rust_decimal::prelude::FromPrimitive;

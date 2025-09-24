@@ -11,7 +11,7 @@ use crate::models::dca_strategy::{
     ExecutionEntity as DCAExecutionEntity,
     CreateDCAStrategyRequest, UpdateDCAStrategyRequest,
     DCAStrategyResponse, DCAStrategiesResponse, DCAExecutionResponse,
-    DCAStrategyType, DCAStatus,
+    DCAStatus,
 };
 use crate::services::{DCAExecutionEngine, MarketDataService};
 use crate::utils::errors::AppError;
@@ -85,23 +85,10 @@ pub async fn create_dca_strategy(
     let response = DCAStrategyResponse {
         id: strategy.id,
         user_id: strategy.user_id,
-        name: strategy.name,
-        asset_symbol: strategy.asset_symbol,
-        total_allocation: strategy.total_allocation,
-        base_tranche_size: strategy.base_tranche_size,
-        status: strategy.status,
-        strategy_type: strategy.strategy_type,
-        sentiment_multiplier: strategy.sentiment_multiplier,
-        volatility_adjustment: strategy.volatility_adjustment,
-        fear_greed_threshold_buy: strategy.fear_greed_threshold_buy,
-        fear_greed_threshold_sell: strategy.fear_greed_threshold_sell,
-        max_tranche_percentage: strategy.max_tranche_percentage,
-        min_tranche_percentage: strategy.min_tranche_percentage,
-        dca_interval_hours: strategy.dca_interval_hours,
-        target_zones: strategy.target_zones.as_ref()
-            .and_then(|zones_str| serde_json::from_str::<Vec<Decimal>>(zones_str).ok()),
-        stop_loss_percentage: strategy.stop_loss_percentage,
-        take_profit_percentage: strategy.take_profit_percentage,
+        name: strategy.name.clone(),
+        asset_symbol: strategy.asset_symbol.clone(),
+        status: strategy.status.clone(),
+        config: strategy.get_dca_config().map_err(|e| AppError::BadRequest(e))?,
         total_invested: strategy.total_invested,
         total_purchased: strategy.total_purchased,
         average_buy_price: strategy.average_buy_price,
@@ -194,7 +181,8 @@ pub async fn get_dca_strategies(
         };
 
         // Update totals
-        total_allocation += strategy.total_allocation;
+        let config = strategy.get_dca_config().unwrap_or_else(|_| Default::default());
+        total_allocation += config.base_amount * Decimal::from(12); // Assume 12 months for total allocation
         total_invested += strategy.total_invested;
         if let Some(pnl) = current_profit_loss {
             total_profit_loss += pnl;
@@ -208,21 +196,8 @@ pub async fn get_dca_strategies(
             user_id: strategy.user_id,
             name: strategy.name,
             asset_symbol: strategy.asset_symbol,
-            total_allocation: strategy.total_allocation,
-            base_tranche_size: strategy.base_tranche_size,
             status: strategy.status,
-            strategy_type: strategy.strategy_type,
-            sentiment_multiplier: strategy.sentiment_multiplier,
-            volatility_adjustment: strategy.volatility_adjustment,
-            fear_greed_threshold_buy: strategy.fear_greed_threshold_buy,
-            fear_greed_threshold_sell: strategy.fear_greed_threshold_sell,
-            max_tranche_percentage: strategy.max_tranche_percentage,
-            min_tranche_percentage: strategy.min_tranche_percentage,
-            dca_interval_hours: strategy.dca_interval_hours,
-            target_zones: strategy.target_zones.as_ref()
-                .and_then(|zones_str| serde_json::from_str::<Vec<Decimal>>(zones_str).ok()),
-            stop_loss_percentage: strategy.stop_loss_percentage,
-            take_profit_percentage: strategy.take_profit_percentage,
+            config: config,
             total_invested: strategy.total_invested,
             total_purchased: strategy.total_purchased,
             average_buy_price: strategy.average_buy_price,
@@ -328,23 +303,10 @@ pub async fn get_dca_strategy(
     let response = DCAStrategyResponse {
         id: strategy.id,
         user_id: strategy.user_id,
-        name: strategy.name,
-        asset_symbol: strategy.asset_symbol,
-        total_allocation: strategy.total_allocation,
-        base_tranche_size: strategy.base_tranche_size,
-        status: strategy.status,
-        strategy_type: strategy.strategy_type,
-        sentiment_multiplier: strategy.sentiment_multiplier,
-        volatility_adjustment: strategy.volatility_adjustment,
-        fear_greed_threshold_buy: strategy.fear_greed_threshold_buy,
-        fear_greed_threshold_sell: strategy.fear_greed_threshold_sell,
-        max_tranche_percentage: strategy.max_tranche_percentage,
-        min_tranche_percentage: strategy.min_tranche_percentage,
-        dca_interval_hours: strategy.dca_interval_hours,
-        target_zones: strategy.target_zones.as_ref()
-            .and_then(|zones_str| serde_json::from_str::<Vec<Decimal>>(zones_str).ok()),
-        stop_loss_percentage: strategy.stop_loss_percentage,
-        take_profit_percentage: strategy.take_profit_percentage,
+        name: strategy.name.clone(),
+        asset_symbol: strategy.asset_symbol.clone(),
+        status: strategy.status.clone(),
+        config: strategy.get_dca_config().unwrap_or_else(|_| Default::default()),
         total_invested: strategy.total_invested,
         total_purchased: strategy.total_purchased,
         average_buy_price: strategy.average_buy_price,
@@ -397,50 +359,21 @@ pub async fn update_dca_strategy(
         strategy.name = Set(name.clone());
     }
 
-    if let Some(total_allocation) = body.total_allocation {
-        strategy.total_allocation = Set(total_allocation);
-
-        // Recalculate base tranche size if allocation changes
-        if let Some(base_percentage) = body.base_tranche_percentage {
-            let new_tranche_size = total_allocation * base_percentage / Decimal::from(100);
-            strategy.base_tranche_size = Set(new_tranche_size);
-        }
-    }
-
+    // Update status if provided
     if let Some(status) = &body.status {
         strategy.status = Set(status.clone().into());
     }
 
-    if let Some(sentiment_multiplier) = body.sentiment_multiplier {
-        strategy.sentiment_multiplier = Set(sentiment_multiplier);
-    }
+    // Update config if provided
+    if let Some(config) = &body.config {
+        // Validate the new config
+        config.validate().map_err(|e| AppError::BadRequest(format!("Invalid DCAConfig: {}", e)))?;
 
-    if let Some(volatility_adjustment) = body.volatility_adjustment {
-        strategy.volatility_adjustment = Set(volatility_adjustment);
-    }
+        // Serialize the new config to JSON
+        let config_json = serde_json::to_string(&config)
+            .map_err(|e| AppError::BadRequest(format!("Failed to serialize DCAConfig: {}", e)))?;
 
-    if let Some(fear_greed_buy) = body.fear_greed_threshold_buy {
-        strategy.fear_greed_threshold_buy = Set(fear_greed_buy);
-    }
-
-    if let Some(fear_greed_sell) = body.fear_greed_threshold_sell {
-        strategy.fear_greed_threshold_sell = Set(fear_greed_sell);
-    }
-
-    if let Some(interval_hours) = body.dca_interval_hours {
-        strategy.dca_interval_hours = Set(interval_hours);
-    }
-
-    if let Some(zones) = &body.target_zones {
-        strategy.target_zones = Set(Some(serde_json::to_string(zones).unwrap()));
-    }
-
-    if let Some(stop_loss) = body.stop_loss_percentage {
-        strategy.stop_loss_percentage = Set(Some(stop_loss));
-    }
-
-    if let Some(take_profit) = body.take_profit_percentage {
-        strategy.take_profit_percentage = Set(Some(take_profit));
+        strategy.config_json = Set(config_json);
     }
 
     strategy.updated_at = Set(Utc::now());
@@ -454,23 +387,10 @@ pub async fn update_dca_strategy(
     let response = DCAStrategyResponse {
         id: updated_strategy.id,
         user_id: updated_strategy.user_id,
-        name: updated_strategy.name,
-        asset_symbol: updated_strategy.asset_symbol,
-        total_allocation: updated_strategy.total_allocation,
-        base_tranche_size: updated_strategy.base_tranche_size,
-        status: updated_strategy.status,
-        strategy_type: updated_strategy.strategy_type,
-        sentiment_multiplier: updated_strategy.sentiment_multiplier,
-        volatility_adjustment: updated_strategy.volatility_adjustment,
-        fear_greed_threshold_buy: updated_strategy.fear_greed_threshold_buy,
-        fear_greed_threshold_sell: updated_strategy.fear_greed_threshold_sell,
-        max_tranche_percentage: updated_strategy.max_tranche_percentage,
-        min_tranche_percentage: updated_strategy.min_tranche_percentage,
-        dca_interval_hours: updated_strategy.dca_interval_hours,
-        target_zones: updated_strategy.target_zones.as_ref()
-            .and_then(|zones_str| serde_json::from_str::<Vec<Decimal>>(zones_str).ok()),
-        stop_loss_percentage: updated_strategy.stop_loss_percentage,
-        take_profit_percentage: updated_strategy.take_profit_percentage,
+        name: updated_strategy.name.clone(),
+        asset_symbol: updated_strategy.asset_symbol.clone(),
+        status: updated_strategy.status.clone(),
+        config: updated_strategy.get_dca_config().unwrap_or_else(|_| Default::default()),
         total_invested: updated_strategy.total_invested,
         total_purchased: updated_strategy.total_purchased,
         average_buy_price: updated_strategy.average_buy_price,

@@ -2,12 +2,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration, Datelike, Timelike};
 use rust_decimal::Decimal;
 use serde_json::Value;
-use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 use crate::strategies::core::{
-    Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal, StrategySignalType,
-    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, QuantityType, IndicatorValue,
+    Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal,
+    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, IndicatorValue,
 };
 use crate::strategies::indicators;
 use crate::utils::errors::AppError;
