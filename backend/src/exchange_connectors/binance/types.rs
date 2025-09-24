@@ -11,24 +11,6 @@ pub enum BinanceWalletType {
     Futures,
 }
 
-impl BinanceWalletType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            BinanceWalletType::Spot => "spot",
-            BinanceWalletType::Margin => "margin", 
-            BinanceWalletType::Futures => "futures",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "spot" => Some(BinanceWalletType::Spot),
-            "margin" => Some(BinanceWalletType::Margin),
-            "futures" => Some(BinanceWalletType::Futures),
-            _ => None,
-        }
-    }
-}
 
 /// Binance-specific futures type
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -37,14 +19,6 @@ pub enum BinanceFuturesType {
     COINM, // COIN-M Futures
 }
 
-impl BinanceFuturesType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            BinanceFuturesType::USDM => "usdm",
-            BinanceFuturesType::COINM => "coinm",
-        }
-    }
-}
 
 /// Binance asset balance with specific wallet type
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
 use reqwest::Client;
 use serde_json::Value;
-use chrono::{DateTime, Utc};
+use chrono::{ Utc};
 use std::collections::HashMap;
 use std::str::FromStr;
 use hmac::{Hmac, Mac};
@@ -29,30 +29,11 @@ impl BinanceApiClient {
         })
     }
 
-    pub fn get_api_key(&self) -> &str {
-        &self.credentials.api_key
-    }
-
-    pub fn get_api_secret(&self) -> &str {
-        &self.credentials.api_secret
-    }
 
     pub async fn test_connectivity(&self) -> Result<bool, ExchangeError> {
         let url = format!("{}/api/v3/ping", self.spot_base_url);
         let response = self.client.get(&url).send().await?;
         Ok(response.status().is_success())
-    }
-
-    pub async fn get_server_time(&self) -> Result<DateTime<Utc>, ExchangeError> {
-        let url = format!("{}/api/v3/time", self.spot_base_url);
-        let response = self.client.get(&url).send().await?;
-        let json: Value = response.json().await?;
-
-        if let Some(server_time) = json.get("serverTime").and_then(|v| v.as_i64()) {
-            Ok(DateTime::from_timestamp_millis(server_time).unwrap_or_else(|| Utc::now()))
-        } else {
-            Err(ExchangeError::ParseError("Failed to parse server time".to_string()))
-        }
     }
 
     fn create_signature(&self, query_string: &str) -> String {

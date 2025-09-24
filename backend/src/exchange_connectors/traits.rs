@@ -9,11 +9,7 @@ use crate::exchange_connectors::{
 
 #[async_trait]
 pub trait ExchangeConnector: Send + Sync {
-    fn name(&self) -> &'static str;
-
     async fn test_connection(&self) -> Result<bool, ExchangeError>;
-
-    async fn get_server_time(&self) -> Result<DateTime<Utc>, ExchangeError>;
 }
 
 #[async_trait]
@@ -25,8 +21,6 @@ pub trait AccountAPI: ExchangeConnector {
     async fn get_futures_account(&self, account_type: FuturesType) -> Result<FuturesAccount, ExchangeError>;
 
     async fn get_all_balances(&self) -> Result<AccountBalances, ExchangeError>;
-
-    async fn get_asset_balance(&self, asset: &str, wallet_type: WalletType) -> Result<AssetBalance, ExchangeError>;
 }
 
 #[async_trait]

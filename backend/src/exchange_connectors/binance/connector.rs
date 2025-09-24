@@ -30,10 +30,6 @@ impl BinanceConnector {
 
 #[async_trait]
 impl ExchangeConnector for BinanceConnector {
-    fn name(&self) -> &'static str {
-        "Binance"
-    }
-
     async fn test_connection(&self) -> Result<bool, ExchangeError> {
         // First check exchange status (maintenance mode, etc.)
         let url = format!("{}/api/v3/exchangeInfo", self.client.spot_base_url);
@@ -85,9 +81,6 @@ impl ExchangeConnector for BinanceConnector {
         }
     }
 
-    async fn get_server_time(&self) -> Result<DateTime<Utc>, ExchangeError> {
-        self.client.get_server_time().await
-    }
 }
 
 #[async_trait]
@@ -244,34 +237,7 @@ impl AccountAPI for BinanceConnector {
     })
 }
 
-async fn get_asset_balance(&self, asset: &str, wallet_type: WalletType) -> Result<AssetBalance, ExchangeError> {
-    match wallet_type {
-        WalletType::Spot => {
-            let account = self.get_spot_account().await?;
-            account.balances.into_iter()
-                .find(|b| b.asset == asset)
-                .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
-        }
-        WalletType::Margin => {
-            let account = self.get_margin_account().await?;
-            account.balances.into_iter()
-                .find(|b| b.asset == asset)
-                .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
-        }
-            WalletType::Futures => {
-                // Default to USD-M futures for now
-                let account = self.get_futures_account(FuturesType::USDM).await?;
-                account.balances.into_iter()
-                    .find(|b| b.asset == asset)
-                    .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
-            }
-        _ => Err(ExchangeError::NotSupported(format!("{:?} wallet not supported", wallet_type)))
-    }
-}
-}
-
 impl BinanceConnector {
-
     // Helper method to get Savings/Earn balances
     async fn get_savings_balances(&self) -> Result<Vec<AssetBalance>, ExchangeError> {
         let mut all_balances = Vec::new();

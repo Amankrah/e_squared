@@ -41,28 +41,4 @@ impl ExchangeFactory {
         }
     }
 
-    pub fn create_with_optional_credentials(
-        exchange: Exchange,
-        api_key: Option<String>,
-        api_secret: Option<String>,
-    ) -> Result<Arc<dyn FullExchangeAPI>, ExchangeError> {
-        let credentials = if let (Some(key), Some(secret)) = (api_key, api_secret) {
-            ExchangeCredentials {
-                api_key: key,
-                api_secret: secret,
-            }
-        } else {
-            return Err(ExchangeError::InvalidApiKey);
-        };
-
-        Self::create(exchange, credentials)
-    }
-
-    pub fn supported_exchanges() -> Vec<Exchange> {
-        vec![Exchange::Binance]
-    }
-
-    pub fn is_supported(exchange: &Exchange) -> bool {
-        matches!(exchange, Exchange::Binance)
-    }
 }
