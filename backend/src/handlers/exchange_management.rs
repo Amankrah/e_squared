@@ -1025,7 +1025,6 @@ pub async fn test_connection_status(
         "tested_at": chrono::Utc::now()
     })))
 }
-
 /// Get all wallet balances for all user's exchange connections
 pub async fn get_all_user_balances(
     db: web::Data<DatabaseConnection>,

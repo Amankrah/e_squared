@@ -236,6 +236,7 @@ impl AccountAPI for BinanceConnector {
         total_btc_value,
     })
 }
+}
 
 impl BinanceConnector {
     // Helper method to get Savings/Earn balances

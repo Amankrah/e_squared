@@ -315,15 +315,13 @@ fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
                 env::var("JWT_SECRET").expect("JWT_SECRET must be set")
             )))
             .route("/connections", web::post().to(exchange_management::create_exchange_connection))
-            // Use optional handler that returns empty array instead of error
-            .route("/connections", web::get().to(handlers::exchange_optional::get_exchange_connections_optional))
+            .route("/connections", web::get().to(exchange_management::get_exchange_connections))
             .route("/connections/{connection_id}", web::put().to(exchange_management::update_exchange_connection))
             .route("/connections/{connection_id}", web::delete().to(exchange_management::delete_exchange_connection))
             .route("/connections/{connection_id}/sync", web::post().to(exchange_management::sync_exchange_balances))
             .route("/connections/{connection_id}/balances", web::get().to(exchange_management::get_wallet_balances))
             .route("/connections/{connection_id}/live-balances", web::post().to(exchange_management::get_live_wallet_balances))
-            // Use optional handler that returns empty array instead of error
-            .route("/balances", web::get().to(handlers::exchange_optional::get_all_user_balances_optional))
+            .route("/balances", web::get().to(exchange_management::get_all_user_balances))
             .route("/live-balances", web::post().to(exchange_management::get_all_live_user_balances))
     );
 }
