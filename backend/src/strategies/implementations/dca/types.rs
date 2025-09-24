@@ -95,8 +95,8 @@ impl Default for RSIConfig {
             period: 14,
             oversold_threshold: Decimal::from(30),
             overbought_threshold: Decimal::from(70),
-            oversold_multiplier: Decimal::from_f32(2.0).unwrap(),
-            overbought_multiplier: Decimal::from_f32(0.5).unwrap(),
+            oversold_multiplier: Decimal::new(2, 0), // 2.0
+            overbought_multiplier: Decimal::new(5, 1), // 0.5
             normal_multiplier: Decimal::from(1),
         }
     }
@@ -125,8 +125,8 @@ impl Default for VolatilityConfig {
             period: 20,
             low_threshold: Decimal::from(10),
             high_threshold: Decimal::from(30),
-            low_volatility_multiplier: Decimal::from_f32(0.8).unwrap(),
-            high_volatility_multiplier: Decimal::from_f32(1.5).unwrap(),
+            low_volatility_multiplier: Decimal::new(8, 1), // 0.8
+            high_volatility_multiplier: Decimal::new(15, 1), // 1.5
             normal_multiplier: Decimal::from(1),
         }
     }

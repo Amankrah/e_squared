@@ -148,24 +148,6 @@ impl EncryptionService {
         Ok(*Key::<Aes256Gcm>::from_slice(&key_bytes))
     }
 
-    /// Decrypt data using stored encrypted values, nonce, and salt
-    pub fn decrypt_with_stored_values(
-        &self,
-        ciphertext: &str,
-        nonce: &str,
-        salt: &str,
-    ) -> Result<String, AppError> {
-        let encrypted_data = EncryptedData {
-            ciphertext: ciphertext.to_string(),
-            nonce: nonce.to_string(),
-            salt: salt.to_string(),
-        };
-
-        // For now, we'll need to pass a dummy password and user_id
-        // This method signature suggests it should work without them
-        // TODO: Review the encryption architecture to handle this case properly
-        Err(AppError::DecryptionError("decrypt_with_stored_values requires password and user_id context".to_string()))
-    }
 
     /// Validate that encrypted data can be decrypted (for testing)
     #[allow(dead_code)]

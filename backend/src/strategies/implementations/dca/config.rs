@@ -273,7 +273,7 @@ impl DCAConfig {
         if let Some(ref factors) = self.dynamic_factors {
             let total_weight = factors.rsi_weight + factors.volatility_weight +
                             factors.sentiment_weight + factors.trend_weight;
-            if total_weight > Decimal::from_f32(1.0).unwrap() + Decimal::from_f32(0.01).unwrap() {
+            if total_weight > Decimal::new(101, 2) { // 1.01
                 return Err("Total weight of dynamic factors cannot exceed 1.0".to_string());
             }
         }

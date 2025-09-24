@@ -47,7 +47,11 @@ impl AppServices {
         let auth_service = AuthService::new(config.jwt_secret.clone());
         let market_service = MarketDataService::new();
         let encryption_service = EncryptionService::new();
-        // Legacy strategy_template_service removed - using new modular system
+
+        // Initialize trading strategies
+        if let Err(e) = strategies::init_all_strategies() {
+            return Err(anyhow::anyhow!("Failed to initialize trading strategies: {:?}", e));
+        }
 
         // Initialize DCA execution engine
         let execution_engine = DCAExecutionEngine::new(

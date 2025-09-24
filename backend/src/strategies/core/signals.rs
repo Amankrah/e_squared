@@ -179,7 +179,7 @@ impl StrategySignal {
         Self {
             signal_type: StrategySignalType::Enter,
             symbol,
-            strength: strength.unwrap_or(Decimal::from_f32(1.0).unwrap()),
+            strength: strength.unwrap_or(Decimal::new(1, 0)),
             reason,
             action: SignalAction {
                 order_type: OrderType::Market,
@@ -203,7 +203,7 @@ impl StrategySignal {
         Self {
             signal_type: StrategySignalType::Exit,
             symbol,
-            strength: strength.unwrap_or(Decimal::from_f32(1.0).unwrap()),
+            strength: strength.unwrap_or(Decimal::new(1, 0)),
             reason,
             action: SignalAction {
                 order_type: OrderType::Market,
@@ -226,7 +226,7 @@ impl StrategySignal {
         Self {
             signal_type: StrategySignalType::Enter,
             symbol,
-            strength: Decimal::from_f32(0.8).unwrap(),
+            strength: Decimal::new(8, 1), // 0.8
             reason,
             action: SignalAction {
                 order_type: OrderType::Market,

@@ -6,9 +6,8 @@ use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 use crate::strategies::core::{
-    Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal,
-    StrategyCategory, RiskLevel, BacktestableStrategy, LiveExecutableStrategy,
-    ControllableStrategy, QuantityType, IndicatorValue,
+    Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal, StrategySignalType,
+    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, QuantityType, IndicatorValue,
 };
 use crate::strategies::indicators;
 use crate::utils::errors::AppError;
@@ -49,7 +48,7 @@ impl DCAStrategy {
     }
 
     /// Create strategy metadata
-    fn create_metadata() -> StrategyMetadata {
+    pub fn create_metadata() -> StrategyMetadata {
         StrategyMetadata {
             id: "dca_v2".to_string(),
             name: "Dollar Cost Averaging v2".to_string(),
@@ -89,6 +88,7 @@ impl DCAStrategy {
 
         // Check if strategy is paused
         if self.is_paused {
+            debug!("DCA execution skipped - strategy is paused");
             return false;
         }
 
@@ -98,6 +98,8 @@ impl DCAStrategy {
             let required_interval = Duration::minutes(config.frequency.to_minutes() as i64);
 
             if time_diff < required_interval {
+                let remaining = required_interval - time_diff;
+                debug!("DCA execution too early - {} minutes remaining", remaining.num_minutes());
                 return false;
             }
         }
@@ -111,8 +113,15 @@ impl DCAStrategy {
         if let Some(max_position) = config.max_position_size {
             let current_position_value = context.position_value();
             if current_position_value >= max_position {
+                debug!("DCA execution skipped - max position size reached ({} >= {})", current_position_value, max_position);
                 return false;
             }
+        }
+
+        // Additional check: ensure we haven't exceeded total allocation
+        if self.state.total_invested >= config.base_amount * Decimal::from(1000) { // Safety limit
+            warn!("DCA strategy reached safety limit of 1000x base amount");
+            return false;
         }
 
         true
@@ -448,6 +457,36 @@ impl DCAStrategy {
         variance * Decimal::from(100)
     }
 
+    /// Capture current market conditions
+    fn capture_market_conditions(&self, context: &StrategyContext) -> MarketConditions {
+        let mut conditions = MarketConditions::default();
+
+        // Calculate RSI if enough data
+        if context.historical_data.len() >= 14 {
+            if let Some(rsi) = indicators::rsi(&context.historical_data, 14) {
+                conditions.rsi = Some(rsi);
+            }
+        }
+
+        // Calculate volatility
+        if context.historical_data.len() >= 20 {
+            conditions.volatility = Some(self.calculate_volatility(&context.historical_data, 20));
+        }
+
+        // Price change from market data
+        if let Some(price_change) = context.market_data.price_change_24h {
+            conditions.price_change_percentage = Some((price_change / context.current_price) * Decimal::from(100));
+        }
+
+        // Volume ratio (if available)
+        if let Some(volume_24h) = context.market_data.volume_24h {
+            // This would require historical volume data to calculate ratio
+            conditions.volume_ratio = Some(Decimal::from(1)); // Placeholder
+        }
+
+        conditions
+    }
+
     /// Record execution in state and history
     fn record_execution(&mut self, context: &StrategyContext, amount: Decimal, market_conditions: MarketConditions) {
         let quantity = amount / context.current_price;
@@ -457,6 +496,22 @@ impl DCAStrategy {
         self.state.total_invested += amount;
         self.state.total_quantity += quantity;
         self.state.purchase_count += 1;
+
+        // Update dip level executions if applicable
+        if let Some(config) = &self.config {
+            if config.strategy_type == DCAType::DipBuying {
+                // Track which dip level was triggered
+                if self.last_signal_reason.contains("Dip level") {
+                    // Extract level from reason string - this is a simplified approach
+                    for (i, _) in config.dip_levels.as_ref().unwrap_or(&Vec::new()).iter().enumerate() {
+                        let level_key = format!("level_{}", i);
+                        let current_count = self.state.dip_level_executions.get(&level_key).unwrap_or(&0);
+                        self.state.dip_level_executions.insert(level_key, current_count + 1);
+                        break;
+                    }
+                }
+            }
+        }
 
         // Recalculate average price
         if self.state.total_quantity > Decimal::ZERO {
@@ -481,6 +536,10 @@ impl DCAStrategy {
         if self.execution_history.len() > 1000 {
             self.execution_history.remove(0);
         }
+
+        info!("DCA execution recorded: {} {} purchased at {} (total: {} {})",
+              quantity, context.symbol, context.current_price,
+              self.state.total_quantity, context.symbol);
     }
 }
 
@@ -524,15 +583,47 @@ impl Strategy for DCAStrategy {
         let amount = self.calculate_investment_amount(context)?;
 
         if amount <= Decimal::ZERO {
+            debug!("DCA amount calculated as zero, skipping execution");
             return Ok(None);
         }
 
-        // Create signal
-        let signal = StrategySignal::dca_buy(
+        // Capture market conditions for signal metadata
+        let market_conditions = self.capture_market_conditions(context);
+
+        info!("DCA signal generated: {} {} at {} (reason: {})",
+              amount, context.symbol, context.current_price, self.last_signal_reason);
+
+        // Create signal with enhanced metadata
+        let mut signal = StrategySignal::dca_buy(
             context.symbol.clone(),
             amount,
             self.last_signal_reason.clone(),
         );
+
+        // Add market indicators to signal metadata
+        let mut indicators = Vec::new();
+        if let Some(rsi) = market_conditions.rsi {
+            indicators.push(IndicatorValue {
+                name: "RSI".to_string(),
+                value: rsi,
+                signal: if rsi < Decimal::from(30) { "oversold" }
+                       else if rsi > Decimal::from(70) { "overbought" }
+                       else { "neutral" }.to_string(),
+            });
+        }
+
+        if let Some(volatility) = market_conditions.volatility {
+            indicators.push(IndicatorValue {
+                name: "Volatility".to_string(),
+                value: volatility,
+                signal: if volatility > Decimal::from(30) { "high" }
+                       else if volatility < Decimal::from(10) { "low" }
+                       else { "normal" }.to_string(),
+            });
+        }
+
+        signal = signal.with_indicators(indicators);
+        signal = signal.with_confidence(Decimal::new(8, 1)); // 0.8
 
         Ok(Some(signal))
     }
@@ -552,8 +643,24 @@ impl Strategy for DCAStrategy {
     }
 
     fn get_state(&self) -> Result<Value, AppError> {
-        serde_json::to_value(&self.state)
-            .map_err(|e| AppError::BadRequest(format!("Failed to serialize state: {}", e)))
+        let mut state_with_metadata = serde_json::to_value(&self.state)
+            .map_err(|e| AppError::BadRequest(format!("Failed to serialize state: {}", e)))?;
+
+        // Add execution history summary
+        if let Some(state_obj) = state_with_metadata.as_object_mut() {
+            state_obj.insert("execution_count".to_string(), serde_json::Value::Number(
+                serde_json::Number::from(self.execution_history.len())
+            ));
+
+            if let Some(last_execution) = self.execution_history.last() {
+                state_obj.insert("last_execution_reason".to_string(),
+                    serde_json::Value::String(last_execution.reason.clone()));
+                state_obj.insert("last_multiplier".to_string(),
+                    serde_json::Value::String(last_execution.multiplier.to_string()));
+            }
+        }
+
+        Ok(state_with_metadata)
     }
 
     fn restore_state(&mut self, state: &Value) -> Result<(), AppError> {
