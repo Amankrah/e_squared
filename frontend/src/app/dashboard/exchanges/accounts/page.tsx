@@ -19,47 +19,60 @@ import {
   DollarSign,
   Coins
 } from "lucide-react"
-import { apiClient, type AccountResponse, type SpotAccount, type MarginAccount, type FuturesAccount } from "@/lib/api"
+import { apiClient, type SpotAccount, type MarginAccount, type FuturesAccount, type ExchangeConnection, type LiveBalancesResponse } from "@/lib/api"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 
 interface ExchangeAccountsPageProps {}
 
 export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
-  const [accounts, setAccounts] = useState<AccountResponse[]>([])
+  const [connections, setConnections] = useState<ExchangeConnection[]>([])
+  const [liveBalances, setLiveBalances] = useState<LiveBalancesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTab, setSelectedTab] = useState("overview")
 
   useEffect(() => {
-    fetchAccounts()
+    fetchConnections()
   }, [])
 
-  const fetchAccounts = async () => {
+  const fetchConnections = async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await apiClient.getAllExchangeAccounts()
-      setAccounts(data)
+      const response = await apiClient.getExchangeConnections()
+      setConnections(response.connections)
     } catch (err: any) {
-      setError(err.message || "Failed to fetch exchange accounts")
+      setError(err.message || "Failed to fetch exchange connections")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchLiveBalances = async () => {
+    const password = prompt("Enter your password to load live account balances:")
+    if (!password) return
+
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await apiClient.getAllLiveUserBalances(password)
+      setLiveBalances(data)
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch live balances")
     } finally {
       setLoading(false)
     }
   }
 
   const getTotalValues = () => {
-    const totals = accounts.reduce(
-      (acc, account) => {
-        const usdValue = parseFloat(account.accounts.total_usd_value || "0")
-        const btcValue = parseFloat(account.accounts.total_btc_value || "0")
-        return {
-          usd: acc.usd + usdValue,
-          btc: acc.btc + btcValue
-        }
-      },
-      { usd: 0, btc: 0 }
-    )
-    return totals
+    if (!liveBalances) {
+      return { usd: 0, btc: 0 }
+    }
+    
+    return {
+      usd: parseFloat(liveBalances.total_usd_value || "0"),
+      btc: 0 // Backend doesn't provide total BTC value in live balances response
+    }
   }
 
   const getWalletTypeBadge = (type: string) => {
@@ -264,7 +277,7 @@ export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
             {error}
           </AlertDescription>
         </Alert>
-        <Button onClick={fetchAccounts} className="w-full">
+        <Button onClick={fetchConnections} className="w-full">
           <RefreshCw className="w-4 h-4 mr-2" />
           Retry
         </Button>
@@ -272,7 +285,7 @@ export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
     )
   }
 
-  if (accounts.length === 0) {
+  if (connections.length === 0) {
     return (
       <div className="space-y-6">
         <Alert className="border border-blue-400/30 bg-blue-500/10">
@@ -296,9 +309,9 @@ export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
           <h1 className="text-3xl font-bold text-white">Exchange Accounts</h1>
           <p className="text-gray-400">View all your connected exchange account balances</p>
         </div>
-        <Button onClick={fetchAccounts} variant="outline" size="sm">
+        <Button onClick={fetchLiveBalances} variant="outline" size="sm">
           <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
+          Load Live Balances
         </Button>
       </div>
 
@@ -330,7 +343,7 @@ export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-4xl font-bold text-purple-300">
-              {accounts.length}
+              {connections.length}
             </p>
             <p className="text-lg text-gray-400 mt-2">
               Active connections
@@ -340,39 +353,49 @@ export default function ExchangeAccountsPage({}: ExchangeAccountsPageProps) {
       </div>
 
       {/* Exchange Accounts */}
-      {accounts.map((accountData) => (
-        <Card key={accountData.connection_id} className="bg-gradient-to-br from-white/5 to-white/2 border-white/10">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">
-                  {accountData.exchange_name === 'binance' ? '🔶' : '📊'}
-                </span>
-                <div>
-                  <h3 className="text-xl font-bold text-white">{accountData.display_name}</h3>
-                  <p className="text-gray-400 capitalize">{accountData.exchange_name}</p>
+      {liveBalances ? (
+        liveBalances.balances.map((balanceData) => (
+          <Card key={balanceData.exchange_connection_id} className="bg-gradient-to-br from-white/5 to-white/2 border-white/10">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">
+                    {balanceData.exchange_name === 'binance' ? '🔶' : '📊'}
+                  </span>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{balanceData.display_name}</h3>
+                    <p className="text-gray-400 capitalize">{balanceData.exchange_name}</p>
+                  </div>
                 </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-white">
+                    {formatCurrency(parseFloat(balanceData.total_usd_value))}
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Last updated: {new Date(balanceData.last_updated).toLocaleTimeString()}
+                  </p>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {balanceData.accounts.spot && renderSpotAccount(balanceData.accounts.spot, balanceData.exchange_name)}
+                {balanceData.accounts.margin && renderMarginAccount(balanceData.accounts.margin, balanceData.exchange_name)}
+                {balanceData.accounts.futures_usdm && renderFuturesAccount(balanceData.accounts.futures_usdm, balanceData.exchange_name)}
+                {balanceData.accounts.futures_coinm && renderFuturesAccount(balanceData.accounts.futures_coinm, balanceData.exchange_name)}
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-white">
-                  {formatCurrency(parseFloat(accountData.accounts.total_usd_value))}
-                </p>
-                <p className="text-sm text-gray-400">
-                  Last updated: {new Date(accountData.last_update).toLocaleTimeString()}
-                </p>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {accountData.accounts.spot && renderSpotAccount(accountData.accounts.spot, accountData.exchange_name)}
-              {accountData.accounts.margin && renderMarginAccount(accountData.accounts.margin, accountData.exchange_name)}
-              {accountData.accounts.futures_usdm && renderFuturesAccount(accountData.accounts.futures_usdm, accountData.exchange_name)}
-              {accountData.accounts.futures_coinm && renderFuturesAccount(accountData.accounts.futures_coinm, accountData.exchange_name)}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <Alert className="border border-blue-400/30 bg-blue-500/10">
+          <AlertTriangle className="h-4 w-4 text-blue-400" />
+          <AlertTitle className="text-blue-300">Live Balances Not Loaded</AlertTitle>
+          <AlertDescription className="text-blue-200">
+            Click "Load Live Balances" above to fetch real-time account data from your exchanges.
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }

@@ -65,14 +65,9 @@ export function ExchangeConnectionDialog({
         password: formData.password
       })
 
-      // Check if this was an update (200) or create (201) based on response
-      const wasUpdate = result && 'updated_at' in result
-      
       toast({
-        title: wasUpdate ? "Exchange Updated" : "Exchange Connected",
-        description: wasUpdate 
-          ? `Successfully updated ${formData.displayName} connection`
-          : `Successfully connected to ${formData.displayName}`,
+        title: "Exchange Connected",
+        description: `Successfully connected to ${formData.displayName}. API credentials validated and encrypted.`,
       })
 
       onSuccess?.()

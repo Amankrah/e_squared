@@ -19,7 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { ConnectExchangePrompt } from "@/components/dashboard/connect-exchange-prompt"
-import { apiClient, DCAStrategy, ExchangeConnection, WalletBalance } from "@/lib/api"
+import { apiClient, DCAStrategy, ExchangeConnection } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import Link from "next/link"
 
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [strategies, setStrategies] = useState<DCAStrategy[]>([])
   const [connections, setConnections] = useState<ExchangeConnection[]>([])
-  const [balances, setBalances] = useState<WalletBalance[]>([])
+  const [liveBalances, setLiveBalances] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [liveBalanceLoading, setLiveBalanceLoading] = useState(false)
   const [summary, setSummary] = useState({
@@ -45,7 +45,7 @@ export default function Dashboard() {
       // User is not authenticated, clear any existing data
       setStrategies([])
       setConnections([])
-      setBalances([])
+      setLiveBalances(null)
       setLoading(false)
     }
   }, [isAuthenticated, authLoading])
@@ -59,17 +59,13 @@ export default function Dashboard() {
 
     try {
       setLoading(true)
-      const [strategiesRes, connectionsRes, balancesRes] = await Promise.all([
+      const [strategiesRes, connectionsRes] = await Promise.all([
         apiClient.getDCAStrategies().catch(() => ({ strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 })),
-        apiClient.getExchangeConnections().catch(() => ({ connections: [], message: '' })),
-        // For dashboard, use the stored balances endpoint since live balances require password
-        // Users can get live balances by clicking "Load Live Balances" in the exchanges page
-        apiClient.getAllUserBalances().catch(() => ({ balances: [], message: '' }))
+        apiClient.getExchangeConnections().catch(() => ({ connections: [], message: '' }))
       ])
 
       setStrategies(strategiesRes.strategies || [])
       setConnections(connectionsRes.connections || [])
-      setBalances(balancesRes.balances || [])
       setSummary({
         total_allocation: strategiesRes.total_allocation,
         total_invested: strategiesRes.total_invested,
@@ -88,27 +84,18 @@ export default function Dashboard() {
 
     try {
       setLiveBalanceLoading(true)
-      // Trigger sync for all connections to update stored balances with live data
-      // This will prompt user for password when needed
-      const password = prompt("Enter your password to sync live balances:")
+      const password = prompt("Enter your password to load live balances:")
       if (!password) {
         setLiveBalanceLoading(false)
         return
       }
 
-      // Sync each connection to update stored balances with live Binance prices
-      for (const connection of connections) {
-        try {
-          await apiClient.syncExchangeConnection(connection.id, password)
-        } catch (error) {
-          console.error(`Failed to sync connection ${connection.id}:`, error)
-        }
-      }
-
-      // After syncing, reload the dashboard data to get updated balances
-      await loadDashboardData()
+      // Fetch live balances for all connections
+      const liveBalancesResponse = await apiClient.getAllLiveUserBalances(password)
+      setLiveBalances(liveBalancesResponse)
     } catch (error) {
       console.error('Failed to load live balances:', error)
+      alert('Failed to load live balances. Please check your password and try again.')
     } finally {
       setLiveBalanceLoading(false)
     }
@@ -124,13 +111,13 @@ export default function Dashboard() {
   }
 
   const getTotalBalance = () => {
-    // Calculate total from balances array
-    const balanceTotal = balances
-      .filter(b => b.usd_value)
-      .reduce((sum, balance) => sum + parseFloat(balance.usd_value!), 0)
-
-    // If we have no balances or zero total, show a placeholder until live balances are loaded
-    return balanceTotal
+    // Calculate total from live balances if available
+    if (liveBalances && liveBalances.total_usd_value) {
+      return parseFloat(liveBalances.total_usd_value)
+    }
+    
+    // Return 0 until live balances are loaded
+    return 0
   }
 
   const getTodaysPnL = () => {

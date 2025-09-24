@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { apiClient, type ExchangeConnection as ApiExchangeConnection, type WalletBalance } from "@/lib/api"
+import { apiClient, type ExchangeConnection as ApiExchangeConnection } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 
 interface ExchangeConnection {
@@ -30,7 +30,7 @@ interface ExchangeConnection {
     successRate: number
     profit: string
   }
-  balances?: WalletBalance[]
+  liveBalanceData?: any
 }
 
 interface ExchangeConnectionManagerProps {
@@ -81,7 +81,7 @@ export function ExchangeConnectionManager({
         currency: 'USD'
       } : undefined,
       // Store the raw live balance data for detailed view
-      balances: liveBalanceData ? [liveBalanceData] : undefined
+      liveBalanceData: liveBalanceData || undefined
     }
   }
 
@@ -163,13 +163,13 @@ export function ExchangeConnectionManager({
 
     try {
       setIsSyncing(connectionId)
-      const syncResponse = await apiClient.syncExchangeBalances(connectionId, password)
+      const syncResponse = await apiClient.syncExchangeConnection(connectionId, password)
       console.log('Sync response:', syncResponse)
 
       // Reload connections with live balance data using the same password
       await loadConnections(password)
       onConnectionUpdate?.()
-      alert('Balances synced successfully! Live data is now displayed.')
+      alert('Connection synced successfully! Live balance data updated.')
     } catch (error) {
       console.error('Failed to sync balances:', error)
       alert('Failed to sync balances. Please check your password and try again.')

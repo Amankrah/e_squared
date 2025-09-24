@@ -130,18 +130,7 @@ export interface UpdateExchangeConnectionRequest {
   password: string
 }
 
-export interface WalletBalance {
-  id: string
-  exchange_connection_id: string
-  wallet_type: 'spot' | 'margin' | 'futures' | 'funding' | 'earn' | 'options'
-  asset_symbol: string
-  free_balance: string
-  locked_balance: string
-  total_balance: string
-  usd_value?: string
-  last_updated: string
-  created_at: string
-}
+// Removed WalletBalance interface - we only use live balance data from exchanges
 
 // New exchange account types based on modular connector
 export interface AssetBalance {
@@ -257,14 +246,20 @@ export interface ExchangeConnectionsResponse {
   message?: string
 }
 
-export interface WalletBalancesResponse {
-  balances: WalletBalance[]
-  message?: string
-}
-
-export interface SyncBalancesResponse {
-  message: string
-  synced_balances: number
+export interface LiveBalancesResponse {
+  balances: {
+    exchange_connection_id: string
+    exchange_name: string
+    display_name: string
+    total_usd_value: string
+    total_btc_value: string
+    accounts: AccountBalances
+    last_updated: string
+    is_live: boolean
+  }[]
+  total_usd_value: string
+  is_live: boolean
+  last_updated: string
 }
 
 // DCA Strategy Types
@@ -644,44 +639,46 @@ class ApiClient {
     })
   }
 
-  async syncExchangeConnection(connectionId: string, password: string): Promise<any> {
-    return this.request<any>(`/exchanges/connections/${connectionId}/sync`, {
+  async syncExchangeConnection(connectionId: string, password: string): Promise<{
+    connection_id: string
+    exchange_name: string
+    display_name: string
+    total_usd_value: string
+    total_btc_value: string
+    accounts: AccountBalances
+    last_updated: string
+    is_live: boolean
+  }> {
+    return this.request(`/exchanges/connections/${connectionId}/sync`, {
       method: 'POST',
       body: JSON.stringify({ password }),
     })
   }
 
-  async syncExchangeBalances(connectionId: string, password: string): Promise<any> {
-    return this.request<any>(`/exchanges/connections/${connectionId}/sync`, {
+  async getLiveWalletBalances(connectionId: string, password: string): Promise<{
+    exchange_connection_id: string
+    exchange_name: string
+    display_name: string
+    total_usd_value: string
+    total_btc_value: string
+    accounts: AccountBalances
+    last_updated: string
+    is_live: boolean
+  }> {
+    return this.request(`/exchanges/connections/${connectionId}/live-balances`, {
       method: 'POST',
       body: JSON.stringify({ password })
     })
   }
 
-  async getWalletBalances(connectionId: string): Promise<WalletBalancesResponse> {
-    // This endpoint returns stored balances from database - kept for compatibility
-    return this.request<WalletBalancesResponse>(`/exchanges/connections/${connectionId}/balances`)
-  }
-
-  async getLiveWalletBalances(connectionId: string, password: string): Promise<any> {
-    return this.request<any>(`/exchanges/connections/${connectionId}/live-balances`, {
+  async getAllLiveUserBalances(password: string): Promise<LiveBalancesResponse> {
+    return this.request<LiveBalancesResponse>('/exchanges/live-balances', {
       method: 'POST',
       body: JSON.stringify({ password })
     })
   }
 
-  async getAllUserBalances(): Promise<WalletBalancesResponse> {
-    return this.request<WalletBalancesResponse>('/exchanges/balances')
-  }
-
-  async getAllLiveUserBalances(password: string): Promise<any> {
-    return this.request<any>('/exchanges/live-balances', {
-      method: 'POST',
-      body: JSON.stringify({ password })
-    })
-  }
-
-  // New method to get live balances for connections display
+  // Helper method to get connections with live balances
   async getConnectionsWithLiveBalances(password: string): Promise<{
     connections: ExchangeConnection[];
     live_balances: Record<string, any>;
@@ -703,32 +700,6 @@ class ApiClient {
       connections: connectionsResponse.connections,
       live_balances: liveBalancesMap
     };
-  }
-
-  // New exchange account endpoints
-  async getAllExchangeAccounts(): Promise<AccountResponse[]> {
-    return this.request<AccountResponse[]>('/exchange-accounts/all')
-  }
-
-  async getSpotAccount(connectionId: string): Promise<SpotAccountResponse> {
-    return this.request<SpotAccountResponse>(`/exchange-accounts/spot?connection_id=${connectionId}`)
-  }
-
-  async getMarginAccount(connectionId: string): Promise<MarginAccountResponse> {
-    return this.request<MarginAccountResponse>(`/exchange-accounts/margin?connection_id=${connectionId}`)
-  }
-
-  async getFuturesAccount(connectionId: string): Promise<FuturesAccountResponse> {
-    return this.request<FuturesAccountResponse>(`/exchange-accounts/futures?connection_id=${connectionId}`)
-  }
-
-  async testExchangeConnection(connectionId: string): Promise<{
-    connection_id: string
-    exchange_name: string
-    is_connected: boolean
-    tested_at: string
-  }> {
-    return this.request(`/exchange-accounts/test?connection_id=${connectionId}`)
   }
 
   // DCA Strategy endpoints

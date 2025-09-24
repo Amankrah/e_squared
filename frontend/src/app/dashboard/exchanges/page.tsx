@@ -240,7 +240,7 @@ export default function ExchangesPage() {
           </TabsList>
 
           <TabsContent value="connections" className="space-y-6">
-            <ExchangeConnectionManager />
+            <ExchangeConnectionManager onConnectionUpdate={handleConnectionSuccess} />
           </TabsContent>
 
           <TabsContent value="add" className="space-y-6">
