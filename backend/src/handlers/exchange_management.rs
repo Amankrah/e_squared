@@ -10,10 +10,6 @@ use crate::models::{
         CreateExchangeConnectionRequest, UpdateExchangeConnectionRequest, ExchangeConnectionResponse,
         SupportedExchange,
     },
-    wallet_balance::{
-        self, Entity as WalletBalanceEntity,
-        WalletBalanceResponse, WalletSummaryResponse, WalletTypeBalance,
-    },
     user::Entity as UserEntity,
 };
 use crate::utils::{
@@ -22,8 +18,6 @@ use crate::utils::{
 };
 use crate::exchange_connectors::{Exchange, ExchangeFactory, ExchangeCredentials};
 
-use std::collections::HashMap;
-use rust_decimal::Decimal;
 
 /// Create a new exchange connection
 pub async fn create_exchange_connection(
@@ -510,99 +504,9 @@ pub async fn sync_exchange_balances(
     connection_update.update(db.get_ref()).await
         .map_err(AppError::DatabaseError)?;
 
-    // Store the live balance data in database for future access
-    // First, delete existing balances for this connection
-    let _ = WalletBalanceEntity::delete_many()
-        .filter(wallet_balance::Column::ExchangeConnectionId.eq(connection_id))
-        .exec(db.get_ref())
-        .await;
+    // Note: We don't store balance data in database - all balance data is fetched live
 
-    // Convert and store new balance data
-    let current_time = now;
-
-    // Store spot balances
-    if let Some(spot_account) = &account_balances.spot {
-        for balance in &spot_account.balances {
-            let wallet_balance_model = wallet_balance::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                exchange_connection_id: Set(connection_id),
-                wallet_type: Set("spot".to_string()),
-                asset_symbol: Set(balance.asset.clone()),
-                free_balance: Set(balance.free.to_string()),
-                locked_balance: Set(balance.locked.to_string()),
-                total_balance: Set(balance.total.to_string()),
-                usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                last_updated: Set(current_time),
-                created_at: Set(current_time),
-            };
-
-            let _ = wallet_balance_model.insert(db.get_ref()).await;
-        }
-    }
-
-    // Store margin balances
-    if let Some(margin_account) = &account_balances.margin {
-        for balance in &margin_account.balances {
-            let wallet_balance_model = wallet_balance::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                exchange_connection_id: Set(connection_id),
-                wallet_type: Set("margin".to_string()),
-                asset_symbol: Set(balance.asset.clone()),
-                free_balance: Set(balance.free.to_string()),
-                locked_balance: Set(balance.locked.to_string()),
-                total_balance: Set(balance.total.to_string()),
-                usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                last_updated: Set(current_time),
-                created_at: Set(current_time),
-            };
-
-            let _ = wallet_balance_model.insert(db.get_ref()).await;
-        }
-    }
-
-    // Store futures USDM balances
-    if let Some(futures_account) = &account_balances.futures_usdm {
-        for balance in &futures_account.balances {
-            let wallet_balance_model = wallet_balance::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                exchange_connection_id: Set(connection_id),
-                wallet_type: Set("futures_usdm".to_string()),
-                asset_symbol: Set(balance.asset.clone()),
-                free_balance: Set(balance.free.to_string()),
-                locked_balance: Set(balance.locked.to_string()),
-                total_balance: Set(balance.total.to_string()),
-                usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                last_updated: Set(current_time),
-                created_at: Set(current_time),
-            };
-
-            let _ = wallet_balance_model.insert(db.get_ref()).await;
-        }
-    }
-
-    // Store futures COINM balances
-    if let Some(futures_account) = &account_balances.futures_coinm {
-        for balance in &futures_account.balances {
-            let wallet_balance_model = wallet_balance::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                exchange_connection_id: Set(connection_id),
-                wallet_type: Set("futures_coinm".to_string()),
-                asset_symbol: Set(balance.asset.clone()),
-                free_balance: Set(balance.free.to_string()),
-                locked_balance: Set(balance.locked.to_string()),
-                total_balance: Set(balance.total.to_string()),
-                usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                last_updated: Set(current_time),
-                created_at: Set(current_time),
-            };
-
-            let _ = wallet_balance_model.insert(db.get_ref()).await;
-        }
-    }
-
-
-
-    // Return live balance data and confirm it's now stored in database
+    // Return live balance data
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "connection_id": connection_id,
         "exchange_name": exchange_name,
@@ -724,92 +628,6 @@ pub async fn get_live_wallet_balances(
     Ok(HttpResponse::Ok().json(response))
 }
 
-/// Get wallet balances for a specific exchange connection
-pub async fn get_wallet_balances(
-    db: web::Data<DatabaseConnection>,
-    req: HttpRequest,
-    path: web::Path<String>,
-) -> Result<HttpResponse, AppError> {
-    let connection_id_str = path.into_inner();
-    let connection_id = Uuid::parse_str(&connection_id_str)
-        .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
-
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
-
-    // Verify the connection belongs to the user
-    let connection = ExchangeConnectionEntity::find()
-        .filter(exchange_connection::Column::Id.eq(connection_id))
-        .filter(exchange_connection::Column::UserId.eq(user_id))
-        .one(db.get_ref())
-        .await
-        .map_err(AppError::DatabaseError)?
-        .ok_or_else(|| AppError::NotFound("Exchange connection not found".to_string()))?;
-
-    // Get wallet balances
-    let balances = WalletBalanceEntity::find()
-        .filter(wallet_balance::Column::ExchangeConnectionId.eq(connection_id))
-        .all(db.get_ref())
-        .await
-        .map_err(AppError::DatabaseError)?;
-
-    // Group by wallet type
-    let mut wallet_groups: HashMap<String, Vec<WalletBalanceResponse>> = HashMap::new();
-    let mut total_usd_value = Decimal::ZERO;
-
-    for balance in balances {
-        let wallet_type = balance.wallet_type.clone();
-        let balance_response = WalletBalanceResponse::from(balance.clone());
-
-        if let Some(usd_value) = balance.usd_value {
-            if let Ok(decimal_value) = usd_value.parse::<Decimal>() {
-                total_usd_value += decimal_value;
-            }
-        }
-
-        wallet_groups
-            .entry(wallet_type)
-            .or_insert_with(Vec::new)
-            .push(balance_response);
-    }
-
-    let wallets: Vec<WalletTypeBalance> = wallet_groups
-        .into_iter()
-        .map(|(wallet_type, balances)| {
-            let wallet_usd_value = balances
-                .iter()
-                .filter_map(|b| b.usd_value.as_ref()?.parse::<Decimal>().ok())
-                .sum::<Decimal>();
-
-            WalletTypeBalance {
-                wallet_type,
-                balances,
-                wallet_usd_value: if wallet_usd_value > Decimal::ZERO {
-                    Some(wallet_usd_value.to_string())
-                } else {
-                    None
-                },
-            }
-        })
-        .collect();
-
-    let response = WalletSummaryResponse {
-        exchange_connection_id: connection_id,
-        exchange_name: connection.exchange_name,
-        display_name: connection.display_name,
-        wallets,
-        total_usd_value: if total_usd_value > Decimal::ZERO {
-            Some(total_usd_value.to_string())
-        } else {
-            None
-        },
-        last_updated: connection.last_sync.unwrap_or(connection.updated_at),
-    };
-
-    Ok(HttpResponse::Ok().json(response))
-}
 
 /// Get LIVE balances from all user's exchange connections (requires password)
 pub async fn get_all_live_user_balances(
@@ -1024,88 +842,4 @@ pub async fn test_connection_status(
         "message": "Use the sync endpoint with your password to test live connection",
         "tested_at": chrono::Utc::now()
     })))
-}
-/// Get all wallet balances for all user's exchange connections
-pub async fn get_all_user_balances(
-    db: web::Data<DatabaseConnection>,
-    req: HttpRequest,
-) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
-
-    let connections = ExchangeConnectionEntity::find()
-        .filter(exchange_connection::Column::UserId.eq(user_id))
-        .filter(exchange_connection::Column::IsActive.eq(true))
-        .all(db.get_ref())
-        .await
-        .map_err(AppError::DatabaseError)?;
-
-    let mut all_summaries = Vec::new();
-
-    for connection in connections {
-        let balances = WalletBalanceEntity::find()
-            .filter(wallet_balance::Column::ExchangeConnectionId.eq(connection.id))
-            .all(db.get_ref())
-            .await
-            .map_err(AppError::DatabaseError)?;
-
-        // Group by wallet type
-        let mut wallet_groups: HashMap<String, Vec<WalletBalanceResponse>> = HashMap::new();
-        let mut total_usd_value = Decimal::ZERO;
-
-        for balance in balances {
-            let wallet_type = balance.wallet_type.clone();
-            let balance_response = WalletBalanceResponse::from(balance.clone());
-
-            if let Some(usd_value) = balance.usd_value {
-                if let Ok(decimal_value) = usd_value.parse::<Decimal>() {
-                    total_usd_value += decimal_value;
-                }
-            }
-
-            wallet_groups
-                .entry(wallet_type)
-                .or_insert_with(Vec::new)
-                .push(balance_response);
-        }
-
-        let wallets: Vec<WalletTypeBalance> = wallet_groups
-            .into_iter()
-            .map(|(wallet_type, balances)| {
-                let wallet_usd_value = balances
-                    .iter()
-                    .filter_map(|b| b.usd_value.as_ref()?.parse::<Decimal>().ok())
-                    .sum::<Decimal>();
-
-                WalletTypeBalance {
-                    wallet_type,
-                    balances,
-                    wallet_usd_value: if wallet_usd_value > Decimal::ZERO {
-                        Some(wallet_usd_value.to_string())
-                    } else {
-                        None
-                    },
-                }
-            })
-            .collect();
-
-        let summary = WalletSummaryResponse {
-            exchange_connection_id: connection.id,
-            exchange_name: connection.exchange_name,
-            display_name: connection.display_name,
-            wallets,
-            total_usd_value: if total_usd_value > Decimal::ZERO {
-                Some(total_usd_value.to_string())
-            } else {
-                None
-            },
-            last_updated: connection.last_sync.unwrap_or(connection.updated_at),
-        };
-
-        all_summaries.push(summary);
-    }
-
-    Ok(HttpResponse::Ok().json(all_summaries))
 }

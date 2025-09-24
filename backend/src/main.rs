@@ -19,7 +19,7 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use config::Config;
 use handlers::{auth, user_profile, two_factor, session_management, exchange_management, dca_strategy_management, strategy_templates_handler, AuthService};
-use services::{MarketDataService, DCAExecutionEngine, StrategyTemplateService, BalanceUpdateService};
+use services::{MarketDataService, DCAExecutionEngine, StrategyTemplateService};
 use utils::encryption::EncryptionService;
 use middleware::{AuthMiddleware, SessionTrackingMiddleware};
 
@@ -319,9 +319,7 @@ fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
             .route("/connections/{connection_id}", web::put().to(exchange_management::update_exchange_connection))
             .route("/connections/{connection_id}", web::delete().to(exchange_management::delete_exchange_connection))
             .route("/connections/{connection_id}/sync", web::post().to(exchange_management::sync_exchange_balances))
-            .route("/connections/{connection_id}/balances", web::get().to(exchange_management::get_wallet_balances))
             .route("/connections/{connection_id}/live-balances", web::post().to(exchange_management::get_live_wallet_balances))
-            .route("/balances", web::get().to(exchange_management::get_all_user_balances))
             .route("/live-balances", web::post().to(exchange_management::get_all_live_user_balances))
     );
 }
@@ -418,20 +416,9 @@ async fn main() -> std::io::Result<()> {
         engine_clone.start_engine().await;
     });
 
-    // Initialize and start balance update service
-    let balance_service = BalanceUpdateService::new(
-        db_arc.clone(),
-        Some(30), // Update balances every 30 minutes
-    );
-
-    let balance_service_clone = balance_service.clone();
-    tokio::spawn(async move {
-        balance_service_clone.start_service().await;
-    });
 
     info!("Starting server at {}:{}", config.server_host, config.server_port);
     info!("DCA Execution Engine started");
-    info!("Balance Update Service started");
 
     // Use a consistent key for session encryption (derive from JWT secret for consistency)
     use sha2::{Sha256, Digest};
