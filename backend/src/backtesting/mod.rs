@@ -5,5 +5,5 @@ pub mod binance_fetcher;
 
 pub use engine::BacktestEngine;
 pub use types::*;
-pub use data_cache::{get_cache, init_cache, CacheConfig, CacheStats};
+pub use data_cache::get_cache;
 pub use binance_fetcher::BinanceFetcher;

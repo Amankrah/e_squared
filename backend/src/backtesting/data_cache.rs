@@ -2,13 +2,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::exchange_connectors::{Kline, KlineInterval};
-use crate::utils::errors::AppError;
 
 /// Cache key for kline data
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -49,8 +47,6 @@ pub struct CacheConfig {
     pub hot_ttl_seconds: u64,
     /// Number of accesses to be considered "hot"
     pub hot_threshold: u32,
-    /// Enable cache compression
-    pub enable_compression: bool,
 }
 
 impl Default for CacheConfig {
@@ -60,7 +56,6 @@ impl Default for CacheConfig {
             ttl_seconds: 300, // 5 minutes for cold data
             hot_ttl_seconds: 900, // 15 minutes for hot data
             hot_threshold: 3, // 3+ accesses = hot
-            enable_compression: false, // Disabled for now
         }
     }
 }
@@ -327,9 +322,3 @@ pub fn get_cache() -> Arc<DataCache> {
         .clone()
 }
 
-/// Initialize cache with custom config
-pub fn init_cache(config: CacheConfig) -> Arc<DataCache> {
-    let cache = Arc::new(DataCache::new(config));
-    CACHE_INSTANCE.set(cache.clone()).ok();
-    cache
-}

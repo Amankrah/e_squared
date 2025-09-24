@@ -1,13 +1,14 @@
 use std::sync::Arc;
 use std::time::Instant;
-use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, prelude::*};
-use tracing::{info, debug, error, warn};
+use tracing::{info, debug, warn};
+use uuid::Uuid;
+use chrono::Utc;
 
 use crate::backtesting::types::*;
 use crate::backtesting::binance_fetcher::BinanceFetcher;
-use crate::strategies::{Strategy, StrategyFactory};
-use crate::exchange_connectors::{Kline, KlineInterval};
+use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData, Position};
+use crate::exchange_connectors::{Kline};
 use crate::utils::errors::AppError;
 
 /// Backtesting engine with integrated caching and optimization
@@ -39,10 +40,7 @@ impl BacktestEngine {
         self.validate_config(&config)?;
 
         // Create strategy instance
-        let mut strategy = StrategyFactory::create(
-            &config.strategy_name,
-            config.strategy_parameters.clone(),
-        )?;
+        let mut strategy = create_strategy(&config.strategy_name)?;
 
         // Fetch historical data (will use cache if available)
         let historical_data = self
@@ -152,25 +150,55 @@ impl BacktestEngine {
         let mut trades = Vec::new();
         let mut position_tracker = PositionTracker::new();
 
+        // Create basic strategy context for initialization
+        let init_context = StrategyContext {
+            strategy_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            symbol: config.symbol.clone(),
+            interval: config.interval.to_string(),
+            mode: StrategyMode::Backtest,
+            current_time: Utc::now(),
+            historical_data: historical_data.to_vec(),
+            current_price: historical_data.first().map(|k| k.close).unwrap_or(Decimal::ZERO),
+            available_balance: config.initial_balance,
+            current_positions: Vec::new(),
+            market_data: MarketData::default(),
+        };
+
         // Initialize strategy
-        strategy.initialize(&config.strategy_parameters)?;
+        strategy.initialize(&config.strategy_parameters, StrategyMode::Backtest, &init_context).await?;
 
         // Process each kline
         for (index, kline) in historical_data.iter().enumerate() {
             // Update portfolio value
             portfolio.update_total_value(kline.close);
 
+            // Create context for this analysis
+            let context = StrategyContext {
+                strategy_id: init_context.strategy_id,
+                user_id: init_context.user_id,
+                symbol: config.symbol.clone(),
+                interval: config.interval.to_string(),
+                mode: StrategyMode::Backtest,
+                current_time: kline.close_time,
+                historical_data: historical_data[..=index].to_vec(),
+                current_price: kline.close,
+                available_balance: portfolio.cash_balance,
+                current_positions: Vec::new(), // TODO: Convert from position tracker
+                market_data: MarketData::default(),
+            };
+
             // Get strategy signal
-            let signal = strategy.analyze(historical_data, index);
+            let signal_result = strategy.analyze(&context).await;
 
             // Execute trades based on signal
-            if let Some(signal) = signal {
+            if let Ok(Some(signal)) = signal_result {
                 if let Some(trade) = self.execute_signal(
                     signal,
                     kline,
                     &mut portfolio,
                     &mut position_tracker,
-                    strategy.get_last_signal_reason(),
+                    "Strategy signal".to_string(),
                 ) {
                     trades.push(trade);
                 }
@@ -208,14 +236,20 @@ impl BacktestEngine {
     /// Execute a trading signal
     fn execute_signal(
         &self,
-        signal: crate::strategies::TradeSignal,
+        signal: StrategySignal,
         kline: &Kline,
         portfolio: &mut Portfolio,
         position_tracker: &mut PositionTracker,
         reason: String,
     ) -> Option<BacktestTrade> {
-        match signal {
-            crate::strategies::TradeSignal::Buy(amount) => {
+        match signal.signal_type {
+            StrategySignalType::Enter => {
+                let amount = match &signal.action.quantity {
+                    QuantityType::DollarAmount(amt) => *amt,
+                    QuantityType::Fixed(qty) => *qty * kline.close,
+                    QuantityType::BalancePercentage(pct) => portfolio.cash_balance * pct / Decimal::from(100),
+                    _ => Decimal::from(100), // Default amount
+                };
                 // Check if we already have a position
                 if position_tracker.has_position() {
                     debug!("Skipping buy signal - already have position");
@@ -246,7 +280,13 @@ impl BacktestEngine {
                     None
                 }
             }
-            crate::strategies::TradeSignal::Sell(quantity) => {
+            StrategySignalType::Exit => {
+                let quantity = match &signal.action.quantity {
+                    QuantityType::Fixed(qty) => *qty,
+                    QuantityType::PositionPercentage(pct) => position_tracker.entry_quantity * pct / Decimal::from(100),
+                    QuantityType::AllPosition => position_tracker.entry_quantity,
+                    _ => position_tracker.entry_quantity, // Default to full position
+                };
                 // Check if we have a position to sell
                 if !position_tracker.has_position() {
                     debug!("Skipping sell signal - no position");
@@ -281,6 +321,11 @@ impl BacktestEngine {
                     warn!("Failed to execute sell");
                     None
                 }
+            }
+            _ => {
+                // Handle other signal types (AddToPosition, ReducePosition, etc.)
+                debug!("Ignoring unsupported signal type: {:?}", signal.signal_type);
+                None
             }
         }
     }

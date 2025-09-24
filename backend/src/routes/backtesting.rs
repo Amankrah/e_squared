@@ -11,7 +11,7 @@ use crate::backtesting::{
     get_cache
 };
 use crate::exchange_connectors::KlineInterval;
-use crate::strategies::StrategyRegistry;
+use crate::strategies::{list_all_strategies, get_strategy_metadata};
 use crate::utils::errors::AppError;
 
 /// Run a backtest
@@ -100,14 +100,7 @@ pub async fn fetch_historical_data(
 pub async fn list_strategies(
     _user_id: web::ReqData<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let strategies = StrategyRegistry::list_strategies();
-
-    let mut strategy_details = Vec::new();
-    for name in strategies {
-        if let Ok(info) = StrategyRegistry::get_strategy_info(name) {
-            strategy_details.push(info);
-        }
-    }
+    let strategy_details = list_all_strategies()?;
 
     Ok(HttpResponse::Ok().json(json!({
         "strategies": strategy_details
@@ -120,7 +113,7 @@ pub async fn get_strategy_details(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let strategy_name = path.into_inner();
-    let info = StrategyRegistry::get_strategy_info(&strategy_name)?;
+    let info = get_strategy_metadata(&strategy_name)?;
 
     Ok(HttpResponse::Ok().json(info))
 }
@@ -202,7 +195,7 @@ pub async fn validate_backtest(
         .ok_or_else(|| AppError::BadRequest(format!("Invalid interval: {}", request.interval)))?;
 
     // Validate strategy
-    let _strategy_info = StrategyRegistry::get_strategy_info(&request.strategy_name)?;
+    let _strategy_info = get_strategy_metadata(&request.strategy_name)?;
 
     // Validate balance
     if request.initial_balance <= Decimal::ZERO {

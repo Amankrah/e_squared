@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc, Duration as ChronoDuration};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, warn};
+use serde::{Deserialize};
+use tracing::{debug, error, info};
 
 use crate::exchange_connectors::{Kline, KlineInterval};
 use crate::utils::errors::AppError;
@@ -19,6 +19,7 @@ const KLINES_REQUEST_WEIGHT: u32 = 1;
 
 /// Binance kline response structure
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct BinanceKline(
     i64,    // Open time
     String, // Open

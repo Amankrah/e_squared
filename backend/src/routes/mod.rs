@@ -5,7 +5,7 @@ use std::env;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
-    dca_strategy_management, strategy_templates_handler,
+    dca_strategy_management,
     AuthService
 };
 use crate::middleware::AuthMiddleware;
@@ -148,13 +148,14 @@ fn configure_strategy_template_routes(cfg: &mut web::ServiceConfig) {
     let jwt_secret = env::var("JWT_SECRET")
         .expect("JWT_SECRET environment variable is required");
 
-    cfg.service(
-        web::scope("/strategy-templates")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
-            .route("", web::get().to(strategy_templates_handler::get_strategy_templates))
-            .route("/{template_id}/backtest", web::post().to(strategy_templates_handler::run_template_backtest))
-            .route("/{template_id}", web::get().to(strategy_templates_handler::get_strategy_template))
-    );
+    // Legacy strategy templates routes removed - using new modular strategy system
+    // cfg.service(
+    //     web::scope("/strategy-templates")
+    //         .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
+    //         .route("", web::get().to(strategy_templates_handler::get_strategy_templates))
+    //         .route("/{template_id}/backtest", web::post().to(strategy_templates_handler::run_template_backtest))
+    //         .route("/{template_id}", web::get().to(strategy_templates_handler::get_strategy_template))
+    // );
 }
 
 /// Configure exchange connector routes

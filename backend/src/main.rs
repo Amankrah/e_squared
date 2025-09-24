@@ -23,7 +23,7 @@ use config::Config;
 use handlers::AuthService;
 use middleware::SessionTrackingMiddleware;
 use routes::configure_routes;
-use services::{MarketDataService, DCAExecutionEngine, StrategyTemplateService};
+use services::{MarketDataService, DCAExecutionEngine};
 use utils::encryption::EncryptionService;
 
 /// Initialize application services
@@ -32,7 +32,6 @@ struct AppServices {
     auth_service: AuthService,
     market_service: MarketDataService,
     execution_engine: DCAExecutionEngine,
-    strategy_template_service: StrategyTemplateService,
 }
 
 impl AppServices {
@@ -48,7 +47,7 @@ impl AppServices {
         let auth_service = AuthService::new(config.jwt_secret.clone());
         let market_service = MarketDataService::new();
         let encryption_service = EncryptionService::new();
-        let strategy_template_service = StrategyTemplateService::new();
+        // Legacy strategy_template_service removed - using new modular system
 
         // Initialize DCA execution engine
         let execution_engine = DCAExecutionEngine::new(
@@ -62,7 +61,6 @@ impl AppServices {
             auth_service,
             market_service,
             execution_engine,
-            strategy_template_service,
         })
     }
 
@@ -127,7 +125,7 @@ fn create_server(
         let auth_service = services.auth_service.clone();
         let market_service = services.market_service.clone();
         let execution_engine = services.execution_engine.clone();
-        let strategy_template_service = services.strategy_template_service.clone();
+        // Legacy strategy_template_service removed
         let secret_key = secret_key.clone();
         let cors_origin = config.cors_origin.clone();
         
@@ -154,7 +152,7 @@ fn create_server(
             .app_data(web::Data::new(auth_service.clone()))
             .app_data(web::Data::new(market_service.clone()))
             .app_data(web::Data::new(execution_engine.clone()))
-            .app_data(web::Data::new(strategy_template_service.clone()))
+            // Legacy strategy_template_service removed
             .wrap(cors)
             .wrap(Logger::default())
             .wrap(
