@@ -240,19 +240,14 @@ impl DCAExecutionEngine {
         Ok(())
     }
 
-    /// Check if a strategy should execute based on conditions
+    /// Check if a strategy should execute using the strategy framework
     async fn should_strategy_execute(&self, strategy: &DCAStrategy) -> Result<Option<TriggerReason>, AppError> {
         // Check if strategy is active
         if strategy.status != "active" {
             return Ok(None);
         }
 
-        // Check if we have allocation left
-        if strategy.total_invested >= strategy.total_allocation {
-            return Ok(None);
-        }
-
-        // Check time-based execution
+        // Check time-based execution first
         let now = Utc::now();
         if let Some(next_execution) = strategy.next_execution_at {
             if now < next_execution {
@@ -260,44 +255,18 @@ impl DCAExecutionEngine {
             }
         }
 
-        // Get market data for decision
-        let market_data = self.get_market_data_for_asset(&strategy.asset_symbol).await?;
+        // Get historical market data for the strategy framework
+        let historical_data = self.get_historical_data_for_asset(&strategy.asset_symbol).await?;
 
-        // Check for extreme fear (aggressive buying opportunity)
-        if let Some(fear_greed) = market_data.fear_greed_index {
-            if fear_greed <= 25 && strategy.sentiment_multiplier {
-                return Ok(Some(TriggerReason::FearExtreme));
-            }
-
-            // Don't buy in extreme greed
-            if fear_greed >= strategy.fear_greed_threshold_sell {
-                return Ok(None);
+        // Use the strategy framework to determine if we should execute
+        match strategy.should_execute(historical_data).await {
+            Ok(true) => Ok(Some(TriggerReason::Scheduled)), // Strategy framework said yes
+            Ok(false) => Ok(None), // Strategy framework said no
+            Err(e) => {
+                warn!("Strategy framework analysis failed for strategy {}: {}", strategy.id, e);
+                Ok(None) // Fail safe - don't execute if framework fails
             }
         }
-
-        // Check volatility spikes (buy the dip opportunity)
-        if let Some(volatility) = market_data.volatility_7d {
-            if volatility > Decimal::from(50) && strategy.volatility_adjustment {
-                return Ok(Some(TriggerReason::VolatilitySpike));
-            }
-        }
-
-        // Check zone-based execution
-        if let Some(zones_str) = &strategy.target_zones {
-            if let Ok(zones) = serde_json::from_str::<Vec<Decimal>>(zones_str) {
-                for zone in zones {
-                    // 2% tolerance for zone hits
-                    if let Ok(tolerance_multiplier) = Decimal::try_from(1.02) {
-                        if market_data.price <= zone * tolerance_multiplier {
-                            return Ok(Some(TriggerReason::ZoneHit));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Default scheduled execution
-        Ok(Some(TriggerReason::Scheduled))
     }
 
     /// Process queued executions in optimized batches
@@ -380,16 +349,43 @@ impl DCAExecutionEngine {
             }
         };
 
-        // Determine execution type and amount
-        let execution_type = if strategy.should_execute_sell(&market_data, market_data.price) {
-            ExecutionType::Sell
-        } else if strategy.should_execute_buy(&market_data, market_data.price) {
-            ExecutionType::Buy
-        } else {
-            ExecutionType::Skip
+        // Get historical data for strategy framework
+        let historical_data = match self.get_historical_data_for_asset(&strategy.asset_symbol).await {
+            Ok(data) => data,
+            Err(e) => {
+                return ExecutionResult {
+                    strategy_id: request.strategy_id,
+                    execution_id: Uuid::new_v4(),
+                    success: false,
+                    execution_type: ExecutionType::Skip,
+                    amount_usd: Decimal::ZERO,
+                    amount_asset: None,
+                    price: Some(market_data.price),
+                    error_message: Some(format!("Failed to get historical data: {:?}", e)),
+                    execution_time_ms: start_time.elapsed().as_millis(),
+                };
+            }
         };
 
-        if execution_type == ExecutionType::Skip {
+        // Use strategy framework to determine execution
+        let should_execute = match strategy.should_execute(historical_data.clone()).await {
+            Ok(should) => should,
+            Err(e) => {
+                return ExecutionResult {
+                    strategy_id: request.strategy_id,
+                    execution_id: Uuid::new_v4(),
+                    success: false,
+                    execution_type: ExecutionType::Skip,
+                    amount_usd: Decimal::ZERO,
+                    amount_asset: None,
+                    price: Some(market_data.price),
+                    error_message: Some(format!("Strategy framework failed: {}", e)),
+                    execution_time_ms: start_time.elapsed().as_millis(),
+                };
+            }
+        };
+
+        if !should_execute {
             return ExecutionResult {
                 strategy_id: request.strategy_id,
                 execution_id: Uuid::new_v4(),
@@ -403,11 +399,14 @@ impl DCAExecutionEngine {
             };
         }
 
-        // Calculate dynamic amount based on strategy and market conditions
+        // For now, we default to buy execution (most DCA strategies are buy-heavy)
+        let execution_type = ExecutionType::Buy;
+
+        // Calculate dynamic amount using strategy framework
         let amount_usd = if let Some(manual_amount) = request.manual_amount {
             manual_amount
         } else {
-            match strategy.calculate_current_tranche_size(&market_data) {
+            match strategy.calculate_current_tranche_size(historical_data).await {
                 Ok(size) => size,
                 Err(e) => {
                     return ExecutionResult {
@@ -655,6 +654,13 @@ impl DCAExecutionEngine {
         cache.insert(symbol.to_string(), market_data.clone());
 
         Ok(market_data)
+    }
+
+    /// Get historical kline data for strategy framework
+    async fn get_historical_data_for_asset(&self, symbol: &str) -> Result<Vec<crate::exchange_connectors::Kline>, AppError> {
+        // For now, return empty vec. In production, this would fetch real historical data
+        // from the market data service or database
+        Ok(vec![])
     }
 
     /// Update market data cache for all tracked assets

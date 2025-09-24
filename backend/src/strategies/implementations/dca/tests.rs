@@ -1,7 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::strategies::core::{StrategyContext, StrategyMode, MarketData, StrategyContextBuilder};
+    // Import all required types explicitly
+    use crate::strategies::core::{
+        StrategyContext, StrategyMode, StrategyContextBuilder,
+        Strategy, StrategySignalType, QuantityType, StrategyCategory, RiskLevel,
+        ControllableStrategy
+    };
+    use crate::strategies::implementations::dca::{
+        DCAStrategy, DCAConfig, DCAFrequency, RSIConfig, VolatilityConfig,
+        DipBuyingLevel, DCAPresets
+    };
     use crate::exchange_connectors::Kline;
     use chrono::{Utc, Duration};
     use rust_decimal::{Decimal, prelude::FromPrimitive};
@@ -25,6 +33,7 @@ mod tests {
                 low: current_price - volatility,
                 close: current_price,
                 volume: Decimal::from(1000),
+                quote_asset_volume: Decimal::from(1000) * current_price,
                 number_of_trades: 100,
                 taker_buy_base_asset_volume: Decimal::from(500),
                 taker_buy_quote_asset_volume: Decimal::from(500) * current_price,

@@ -43,18 +43,22 @@ pub async fn create_dca_strategy(
         return Err(AppError::BadRequest("Strategy with this name already exists".to_string()));
     }
 
-    // Calculate tranche size
-    let base_tranche_size = body.total_allocation * body.base_tranche_percentage / Decimal::from(100);
+    // Validate DCAConfig
+    body.config.validate().map_err(|e| AppError::BadRequest(format!("Invalid DCAConfig: {}", e)))?;
 
-    // Set dynamic bounds based on strategy type
-    let (min_percentage, max_percentage) = match body.strategy_type {
-        DCAStrategyType::AdaptiveZone => (Decimal::from(10), Decimal::from(50)), // 10%-50%
-        DCAStrategyType::Classic => (body.base_tranche_percentage, body.base_tranche_percentage), // Fixed
-        DCAStrategyType::Aggressive => (Decimal::from(5), Decimal::from(75)), // 5%-75%
+    // Serialize DCAConfig to JSON
+    let config_json = serde_json::to_string(&body.config)
+        .map_err(|e| AppError::BadRequest(format!("Failed to serialize DCAConfig: {}", e)))?;
+
+    // Calculate initial next execution time based on strategy frequency
+    use crate::strategies::implementations::dca::DCAFrequency;
+    let next_execution_at = match body.config.frequency {
+        DCAFrequency::Hourly(hours) => Utc::now() + chrono::Duration::hours(hours as i64),
+        DCAFrequency::Daily(days) => Utc::now() + chrono::Duration::days(days as i64),
+        DCAFrequency::Weekly(weeks) => Utc::now() + chrono::Duration::weeks(weeks as i64),
+        DCAFrequency::Monthly(months) => Utc::now() + chrono::Duration::days((months * 30) as i64),
+        DCAFrequency::Custom(minutes) => Utc::now() + chrono::Duration::minutes(minutes as i64),
     };
-
-    // Calculate next execution time
-    let next_execution_at = Utc::now() + chrono::Duration::hours(body.dca_interval_hours as i64);
 
     // Create the strategy
     let new_strategy = DCAStrategyActiveModel {
@@ -62,20 +66,8 @@ pub async fn create_dca_strategy(
         user_id: Set(user_id),
         name: Set(body.name.clone()),
         asset_symbol: Set(body.asset_symbol.to_uppercase()),
-        total_allocation: Set(body.total_allocation),
-        base_tranche_size: Set(base_tranche_size),
         status: Set(DCAStatus::Active.into()),
-        strategy_type: Set(body.strategy_type.clone().into()),
-        sentiment_multiplier: Set(body.sentiment_multiplier),
-        volatility_adjustment: Set(body.volatility_adjustment),
-        fear_greed_threshold_buy: Set(body.fear_greed_threshold_buy),
-        fear_greed_threshold_sell: Set(body.fear_greed_threshold_sell),
-        max_tranche_percentage: Set(max_percentage),
-        min_tranche_percentage: Set(min_percentage),
-        dca_interval_hours: Set(body.dca_interval_hours),
-        target_zones: Set(body.target_zones.as_ref().map(|zones| serde_json::to_string(zones).unwrap())),
-        stop_loss_percentage: Set(body.stop_loss_percentage),
-        take_profit_percentage: Set(body.take_profit_percentage),
+        config_json: Set(config_json),
         total_invested: Set(Decimal::ZERO),
         total_purchased: Set(Decimal::ZERO),
         average_buy_price: Set(None),

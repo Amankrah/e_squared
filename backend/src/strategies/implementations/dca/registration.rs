@@ -49,7 +49,7 @@ pub fn init_dca_strategies() -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strategies::core::{get_global_registry, create_strategy};
+    use crate::strategies::core::{get_global_registry, create_strategy, StrategyFactory};
 
     #[test]
     fn test_dca_strategy_registration() {

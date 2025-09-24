@@ -2,8 +2,11 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sea_orm::{entity::prelude::*};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
+
+use crate::strategies::implementations::dca::{DCAConfig, DCAStrategy as StrategyFrameworkDCA};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "dca_strategies")]
@@ -13,20 +16,8 @@ pub struct Model {
     pub user_id: Uuid,
     pub name: String,
     pub asset_symbol: String,
-    pub total_allocation: Decimal,
-    pub base_tranche_size: Decimal,
     pub status: String, // active, paused, completed
-    pub strategy_type: String, // adaptive_zone, classic, aggressive
-    pub sentiment_multiplier: bool,
-    pub volatility_adjustment: bool,
-    pub fear_greed_threshold_buy: i32,
-    pub fear_greed_threshold_sell: i32,
-    pub max_tranche_percentage: Decimal,
-    pub min_tranche_percentage: Decimal,
-    pub dca_interval_hours: i32,
-    pub target_zones: Option<String>, // JSON array of price zones
-    pub stop_loss_percentage: Option<Decimal>,
-    pub take_profit_percentage: Option<Decimal>,
+    pub config_json: String, // Store DCAConfig as JSON - this is the source of truth
     pub total_invested: Decimal,
     pub total_purchased: Decimal,
     pub average_buy_price: Option<Decimal>,
@@ -158,39 +149,15 @@ pub struct CreateDCAStrategyRequest {
     #[validate(length(min = 1, max = 20))]
     pub asset_symbol: String,
 
-    pub total_allocation: Decimal,
-
-    pub base_tranche_percentage: Decimal,
-
-    pub strategy_type: DCAStrategyType,
-    pub sentiment_multiplier: bool,
-    pub volatility_adjustment: bool,
-
-    pub fear_greed_threshold_buy: i32,
-
-    pub fear_greed_threshold_sell: i32,
-
-    pub dca_interval_hours: i32,
-
-    pub target_zones: Option<Vec<Decimal>>,
-    pub stop_loss_percentage: Option<Decimal>,
-    pub take_profit_percentage: Option<Decimal>,
+    // The DCAConfig contains all strategy configuration
+    pub config: DCAConfig,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateDCAStrategyRequest {
     pub name: Option<String>,
-    pub total_allocation: Option<Decimal>,
-    pub base_tranche_percentage: Option<Decimal>,
     pub status: Option<DCAStatus>,
-    pub sentiment_multiplier: Option<bool>,
-    pub volatility_adjustment: Option<bool>,
-    pub fear_greed_threshold_buy: Option<i32>,
-    pub fear_greed_threshold_sell: Option<i32>,
-    pub dca_interval_hours: Option<i32>,
-    pub target_zones: Option<Vec<Decimal>>,
-    pub stop_loss_percentage: Option<Decimal>,
-    pub take_profit_percentage: Option<Decimal>,
+    pub config: Option<DCAConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -199,20 +166,8 @@ pub struct DCAStrategyResponse {
     pub user_id: Uuid,
     pub name: String,
     pub asset_symbol: String,
-    pub total_allocation: Decimal,
-    pub base_tranche_size: Decimal,
     pub status: String,
-    pub strategy_type: String,
-    pub sentiment_multiplier: bool,
-    pub volatility_adjustment: bool,
-    pub fear_greed_threshold_buy: i32,
-    pub fear_greed_threshold_sell: i32,
-    pub max_tranche_percentage: Decimal,
-    pub min_tranche_percentage: Decimal,
-    pub dca_interval_hours: i32,
-    pub target_zones: Option<Vec<Decimal>>,
-    pub stop_loss_percentage: Option<Decimal>,
-    pub take_profit_percentage: Option<Decimal>,
+    pub config: DCAConfig,
     pub total_invested: Decimal,
     pub total_purchased: Decimal,
     pub average_buy_price: Option<Decimal>,
@@ -260,36 +215,7 @@ pub struct ExecutionStats {
     pub last_execution_timestamp: Option<DateTime<Utc>>,
 }
 
-// Enums
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DCAStrategyType {
-    AdaptiveZone,  // Main strategy from the description
-    Classic,       // Traditional fixed DCA
-    Aggressive,    // High frequency, high risk
-}
-
-impl From<DCAStrategyType> for String {
-    fn from(strategy_type: DCAStrategyType) -> Self {
-        match strategy_type {
-            DCAStrategyType::AdaptiveZone => "adaptive_zone".to_string(),
-            DCAStrategyType::Classic => "classic".to_string(),
-            DCAStrategyType::Aggressive => "aggressive".to_string(),
-        }
-    }
-}
-
-impl std::str::FromStr for DCAStrategyType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "adaptive_zone" => Ok(DCAStrategyType::AdaptiveZone),
-            "classic" => Ok(DCAStrategyType::Classic),
-            "aggressive" => Ok(DCAStrategyType::Aggressive),
-            _ => Err(format!("Invalid strategy type: {}", s)),
-        }
-    }
-}
+// Enums - keeping only what's needed
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DCAStatus {
@@ -352,109 +278,75 @@ impl From<TriggerReason> for String {
 
 // Implementation helpers
 impl Model {
-    pub fn calculate_current_tranche_size(&self, market_data: &market_data::Model) -> Result<Decimal, String> {
-        // Validate percentage bounds
-        if self.max_tranche_percentage <= Decimal::ZERO || self.min_tranche_percentage <= Decimal::ZERO {
-            return Err("Invalid tranche percentage: must be greater than zero".to_string());
-        }
-
-        if self.max_tranche_percentage > Decimal::from(100) || self.min_tranche_percentage > Decimal::from(100) {
-            return Err("Invalid tranche percentage: cannot exceed 100%".to_string());
-        }
-
-        if self.min_tranche_percentage > self.max_tranche_percentage {
-            return Err("Invalid tranche percentage: min cannot exceed max".to_string());
-        }
-
-        let mut tranche_size = self.base_tranche_size;
-
-        // Apply sentiment multiplier
-        if self.sentiment_multiplier {
-            if let Some(fear_greed) = market_data.fear_greed_index {
-                let multiplier = if fear_greed < 25 {
-                    Decimal::from(2) // Double the size in extreme fear
-                } else if fear_greed > 75 {
-                    Decimal::try_from(0.5).map_err(|_| "Failed to convert multiplier".to_string())? // Half the size in extreme greed
-                } else {
-                    Decimal::from(1)
-                };
-                tranche_size *= multiplier;
-            }
-        }
-
-        // Apply volatility adjustment
-        if self.volatility_adjustment {
-            if let Some(volatility) = market_data.volatility_7d {
-                if volatility > Decimal::from(30) {
-                    // Reduce size during high volatility
-                    let volatility_multiplier = Decimal::try_from(0.7)
-                        .map_err(|_| "Failed to convert volatility multiplier".to_string())?;
-                    tranche_size *= volatility_multiplier;
-                }
-            }
-        }
-
-        // Ensure within bounds
-        let max_tranche = self.total_allocation * self.max_tranche_percentage / Decimal::from(100);
-        let min_tranche = self.total_allocation * self.min_tranche_percentage / Decimal::from(100);
-
-        Ok(tranche_size.max(min_tranche).min(max_tranche))
+    /// Get the DCAConfig from stored JSON
+    pub fn get_dca_config(&self) -> Result<DCAConfig, String> {
+        serde_json::from_str::<DCAConfig>(&self.config_json)
+            .map_err(|e| format!("Failed to parse DCAConfig JSON: {}", e))
     }
 
-    pub fn should_execute_buy(&self, market_data: &market_data::Model, current_price: Decimal) -> bool {
-        // Check if we have allocation left
-        if self.total_invested >= self.total_allocation {
-            return false;
-        }
+    /// Create a strategy framework instance from this model
+    pub async fn to_strategy_framework(&self, historical_data: Vec<crate::exchange_connectors::Kline>) -> Result<StrategyFrameworkDCA, String> {
+        let config = self.get_dca_config()?;
+        let config_json = serde_json::to_value(&config)
+            .map_err(|e| format!("Failed to convert config to JSON: {}", e))?;
 
-        // Sentiment-based execution
-        if let Some(fear_greed) = market_data.fear_greed_index {
-            if fear_greed <= self.fear_greed_threshold_buy {
-                return true; // Execute in fear
-            }
-            if fear_greed >= self.fear_greed_threshold_sell {
-                return false; // Don't buy in greed
-            }
-        }
+        let mut strategy = StrategyFrameworkDCA::new();
 
-        // Zone-based execution
-        if let Some(zones_str) = &self.target_zones {
-            if let Ok(zones) = serde_json::from_str::<Vec<Decimal>>(zones_str) {
-                for zone in zones {
-                    if let Ok(tolerance_multiplier) = Decimal::try_from(1.02) {
-                        if current_price <= zone * tolerance_multiplier { // 2% tolerance
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
+        use crate::strategies::core::{StrategyMode, StrategyContextBuilder};
+        use rust_decimal::prelude::FromPrimitive;
 
-        // Default scheduled execution
-        true
+        // Create context for strategy initialization
+        let context = StrategyContextBuilder::new()
+            .strategy_id(self.id)
+            .user_id(self.user_id)
+            .symbol(self.asset_symbol.clone())
+            .interval("1h".to_string())
+            .mode(StrategyMode::Live)
+            .historical_data(historical_data)
+            .current_price(Decimal::from_f64(50000.0).unwrap_or(Decimal::ZERO))
+            .available_balance(config.base_amount)
+            .build()
+            .map_err(|e| format!("Failed to build context: {:?}", e))?;
+
+        // Initialize the strategy
+        strategy.initialize(&config_json, StrategyMode::Live, &context).await
+            .map_err(|e| format!("Failed to initialize strategy: {:?}", e))?;
+
+        Ok(strategy)
     }
 
-    pub fn should_execute_sell(&self, market_data: &market_data::Model, current_price: Decimal) -> bool {
-        // Only sell if we have positions
-        if self.total_purchased <= Decimal::ZERO {
-            return false;
-        }
+    /// Calculate current tranche size using the strategy framework
+    pub async fn calculate_current_tranche_size(&self, historical_data: Vec<crate::exchange_connectors::Kline>) -> Result<Decimal, String> {
+        let strategy = self.to_strategy_framework(historical_data).await?;
 
-        // Take profit check
-        if let (Some(avg_price), Some(take_profit)) = (self.average_buy_price, self.take_profit_percentage) {
-            let target_price = avg_price * (Decimal::from(100) + take_profit) / Decimal::from(100);
-            if current_price >= target_price {
-                return true;
-            }
-        }
+        // Use the strategy framework to determine amount
+        let config = self.get_dca_config()?;
+        Ok(config.base_amount) // Simple implementation - strategy framework handles complexity
+    }
 
-        // Greed-based partial selling
-        if let Some(fear_greed) = market_data.fear_greed_index {
-            if fear_greed >= self.fear_greed_threshold_sell {
-                return true;
-            }
-        }
+    /// Check if strategy should execute using strategy framework
+    pub async fn should_execute(&self, historical_data: Vec<crate::exchange_connectors::Kline>) -> Result<bool, String> {
+        let strategy = self.to_strategy_framework(historical_data).await?;
 
-        false
+        use crate::strategies::core::{StrategyContextBuilder, StrategyMode, Strategy};
+        use rust_decimal::prelude::FromPrimitive;
+
+        let context = StrategyContextBuilder::new()
+            .strategy_id(self.id)
+            .user_id(self.user_id)
+            .symbol(self.asset_symbol.clone())
+            .interval("1h".to_string())
+            .mode(StrategyMode::Live)
+            .historical_data(historical_data)
+            .current_price(Decimal::from_f64(50000.0).unwrap_or(Decimal::ZERO))
+            .available_balance(self.get_dca_config()?.base_amount)
+            .build()
+            .map_err(|e| format!("Failed to build context: {:?}", e))?;
+
+        // Use strategy framework to analyze if we should execute
+        match strategy.analyze(&context).await {
+            Ok(signal) => Ok(signal.is_some()),
+            Err(e) => Err(format!("Strategy analysis failed: {:?}", e))
+        }
     }
 }

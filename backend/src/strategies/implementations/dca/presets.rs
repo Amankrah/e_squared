@@ -174,7 +174,14 @@ mod tests {
         // Test all basic presets
         for (name, _, preset_fn) in DCAPresets::get_all_presets() {
             let config = preset_fn(base_amount);
-            assert_eq!(config.base_amount, base_amount);
+
+            // micro_dca preset modifies the base amount, so we handle it separately
+            if name == "micro_dca" {
+                assert_eq!(config.base_amount, base_amount / Decimal::from(24));
+            } else {
+                assert_eq!(config.base_amount, base_amount);
+            }
+
             assert!(config.validate().is_ok(), "Preset {} should be valid", name);
         }
 
