@@ -7,7 +7,7 @@ use crate::backtesting::types::*;
 use crate::strategies::Strategy;
 use crate::exchange_connectors::{
     ExchangeFactory, ExchangeCredentials, Exchange,
-    types::{Kline, KlineInterval},
+    Kline, KlineInterval,
 };
 use crate::utils::errors::AppError;
 
@@ -126,7 +126,6 @@ impl BacktestEngine {
         let credentials = ExchangeCredentials {
             api_key: String::new(),
             api_secret: String::new(),
-            passphrase: None,
         };
 
         let connector = ExchangeFactory::create(exchange, credentials)

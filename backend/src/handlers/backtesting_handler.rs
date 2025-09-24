@@ -7,7 +7,7 @@ use tracing::{info, error};
 
 use crate::backtesting::{BacktestEngine, BacktestConfig, BacktestResult};
 use crate::strategies::{StrategyRegistry, StrategyInfo};
-use crate::exchange_connectors::types::KlineInterval;
+use crate::exchange_connectors::KlineInterval;
 use crate::utils::errors::AppError;
 use crate::handlers::auth::Claims;
 

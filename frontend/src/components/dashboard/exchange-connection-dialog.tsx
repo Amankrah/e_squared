@@ -132,41 +132,45 @@ export function ExchangeConnectionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] bg-gray-950 border-gray-800">
+      <DialogContent className="border-2 border-[rgba(147,51,234,0.3)] rounded-3xl bg-gradient-to-br from-[rgba(147,51,234,0.15)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl sm:max-w-[450px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-              <Link2 className="w-5 h-5 text-purple-400" />
+            <div className="w-12 h-12 bg-[rgba(147,51,234,0.2)] rounded-2xl flex items-center justify-center">
+              <Link2 className="w-6 h-6 text-purple-300" />
             </div>
             <div>
-              <DialogTitle className="text-xl">Connect Exchange</DialogTitle>
-              <DialogDescription className="text-gray-400">
+              <DialogTitle className="text-xl font-semibold text-white">Connect Exchange</DialogTitle>
+              <DialogDescription className="text-gray-300 mt-1">
                 Securely connect your exchange account using API keys
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-3 mt-4">
           {error && (
-            <Alert variant="destructive" className="bg-red-500/10 border-red-500/30">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" className="border border-red-400/30 bg-red-500/10">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertDescription className="text-red-200">{error}</AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="exchange">Exchange</Label>
+            <Label htmlFor="exchange" className="text-sm font-medium text-gray-200">Exchange</Label>
             <Select value={formData.exchange} onValueChange={handleExchangeChange}>
-              <SelectTrigger id="exchange" className="bg-gray-900 border-gray-800">
-                <SelectValue placeholder="Select an exchange" />
+              <SelectTrigger id="exchange" className="bg-white/5 border border-white/20 text-white placeholder:text-gray-400 h-10 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:border-purple-400/50 transition-colors">
+                <SelectValue placeholder="Select an exchange" className="text-white" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-800">
+              <SelectContent className="border-2 border-[rgba(147,51,234,0.3)] rounded-xl bg-gradient-to-br from-[rgba(147,51,234,0.15)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl">
                 {SUPPORTED_EXCHANGES.map(exchange => (
-                  <SelectItem key={exchange.value} value={exchange.value}>
+                  <SelectItem 
+                    key={exchange.value} 
+                    value={exchange.value}
+                    className="text-gray-200 hover:text-white hover:bg-white/10 focus:bg-white/10 cursor-pointer"
+                  >
                     <span className="flex items-center gap-2">
-                      <span>{exchange.icon}</span>
-                      <span>{exchange.label}</span>
+                      <span className="text-lg">{exchange.icon}</span>
+                      <span className="text-gray-200">{exchange.label}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -175,29 +179,29 @@ export function ExchangeConnectionDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="displayName">Connection Name</Label>
+            <Label htmlFor="displayName" className="text-sm font-medium text-gray-200">Connection Name</Label>
             <Input
               id="displayName"
               value={formData.displayName}
               onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
               placeholder="e.g., My Binance Account"
-              className="bg-gray-900 border-gray-800"
+              className="bg-white/5 border border-white/20 text-white placeholder:text-gray-400 h-10 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:border-purple-400/50 transition-colors"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key</Label>
+            <Label htmlFor="apiKey" className="text-sm font-medium text-gray-200">API Key</Label>
             <Input
               id="apiKey"
               value={formData.apiKey}
               onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
               placeholder="Enter your API key"
-              className="bg-gray-900 border-gray-800"
+              className="bg-white/5 border border-white/20 text-white placeholder:text-gray-400 h-10 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:border-purple-400/50 transition-colors"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="apiSecret">API Secret</Label>
+            <Label htmlFor="apiSecret" className="text-sm font-medium text-gray-200">API Secret</Label>
             <div className="relative">
               <Input
                 id="apiSecret"
@@ -205,21 +209,20 @@ export function ExchangeConnectionDialog({
                 value={formData.apiSecret}
                 onChange={(e) => setFormData(prev => ({ ...prev, apiSecret: e.target.value }))}
                 placeholder="Enter your API secret"
-                className="bg-gray-900 border-gray-800 pr-10"
+                className="bg-white/5 border border-white/20 text-white placeholder:text-gray-400 h-10 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:border-purple-400/50 transition-colors pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowApiSecret(!showApiSecret)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
               >
                 {showApiSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-
           <div className="space-y-2">
-            <Label htmlFor="password">Your Password</Label>
+            <Label htmlFor="password" className="text-sm font-medium text-gray-200">Your Password</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -227,45 +230,51 @@ export function ExchangeConnectionDialog({
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                 placeholder="Enter your account password"
-                className="bg-gray-900 border-gray-800 pr-10"
+                className="bg-white/5 border border-white/20 text-white placeholder:text-gray-400 h-10 rounded-xl hover:bg-white/10 focus:bg-white/10 focus:border-purple-400/50 transition-colors pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 mt-1">
               Your password is used to encrypt the API credentials
             </p>
           </div>
 
-          <Alert className="border-purple-500/30 bg-purple-500/10">
-            <Shield className="h-4 w-4 text-purple-400" />
-            <AlertDescription className="text-purple-200 text-sm">
-              <strong>Security Note:</strong> Your API credentials are encrypted with your password
-              and stored securely. We recommend using read-only API keys with IP restrictions.
+          <Alert className="border border-purple-400/30 bg-purple-500/10">
+            <Shield className="h-4 w-4 text-purple-300" />
+            <AlertDescription className="text-purple-100 text-xs leading-relaxed ml-1">
+              <strong className="text-purple-200">Security Note:</strong> Your API credentials are encrypted and stored securely.
             </AlertDescription>
           </Alert>
 
-          <DialogFooter>
+          <DialogFooter className="gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={isLoading}
-              className="bg-transparent border-gray-700 hover:bg-gray-900"
+              className="border border-white/20 text-gray-300 hover:text-white hover:bg-white/10 h-9 px-4"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+              className="h-9 px-4 border border-purple-400/50 rounded-xl bg-gradient-to-r from-purple-600/90 to-pink-600/90 hover:from-purple-500/95 hover:to-pink-500/95 text-white font-medium transition-all duration-300 disabled:opacity-50"
             >
-              {isLoading ? 'Connecting...' : 'Connect Exchange'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Connecting...
+                </span>
+              ) : (
+                'Connect Exchange'
+              )}
             </Button>
           </DialogFooter>
         </form>

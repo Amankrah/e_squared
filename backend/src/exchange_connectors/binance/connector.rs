@@ -7,10 +7,12 @@ use serde_json::Value;
 
 use crate::exchange_connectors::{
     traits::{ExchangeConnector, AccountAPI, OrderAPI, TradeExecutionAPI, MarketDataAPI},
-    types::*,
     ExchangeCredentials,
     ExchangeError,
+    common_types::{SpotAccount, MarginAccount, FuturesAccount, AccountBalances, AssetBalance, WalletType, FuturesType, OrderSide, TimeInForce, Order, OcoOrder},
+    shared_types::{Ticker, OrderBook, Trade, Kline, KlineInterval, ExchangeInfo, SymbolInfo},
 };
+use super::types::*;
 
 use super::api_client::BinanceApiClient;
 use super::converters::*;
@@ -33,7 +35,28 @@ impl ExchangeConnector for BinanceConnector {
     }
 
     async fn test_connection(&self) -> Result<bool, ExchangeError> {
-        // First test basic connectivity
+        // First check exchange status (maintenance mode, etc.)
+        let url = format!("{}/api/v3/exchangeInfo", self.client.spot_base_url);
+        match self.client.client.get(&url).send().await {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    let status_code = response.status().as_u16();
+                    match status_code {
+                        503 => return Err(ExchangeError::Maintenance),
+                        _ => return Err(ExchangeError::Unknown(format!("Exchange unavailable: {}", status_code)))
+                    }
+                }
+            }
+            Err(e) => {
+                if e.is_timeout() {
+                    return Err(ExchangeError::Timeout);
+                } else {
+                    return Err(ExchangeError::NetworkError(format!("Exchange unreachable: {}", e)));
+                }
+            }
+        }
+
+        // Test basic connectivity
         match self.client.test_connectivity().await {
             Ok(false) => return Ok(false),
             Err(e) => {
@@ -44,12 +67,16 @@ impl ExchangeConnector for BinanceConnector {
         }
 
         // Then test API credentials by calling an authenticated endpoint
-        // Use account endpoint which requires valid API key and permissions
         let params = HashMap::new();
         match self.client.signed_request("account", &params).await {
             Ok(_) => {
                 info!("API credentials validated successfully");
                 Ok(true)
+            }
+            Err(ExchangeError::AuthenticationError(_)) | 
+            Err(ExchangeError::InvalidApiKey) => {
+                error!("API credential validation failed: Invalid credentials");
+                Ok(false)
             }
             Err(e) => {
                 error!("API credential validation failed: {}", e);
@@ -68,7 +95,8 @@ impl AccountAPI for BinanceConnector {
     async fn get_spot_account(&self) -> Result<SpotAccount, ExchangeError> {
         let params = HashMap::new();
         let response = self.client.signed_request("account", &params).await?;
-        parse_spot_account_from_json_with_prices(response, &self.client).await
+        let binance_account = parse_spot_account_from_json_with_prices(response, &self.client).await?;
+        Ok(binance_account.into())
     }
 
     async fn get_margin_account(&self) -> Result<MarginAccount, ExchangeError> {
@@ -78,7 +106,8 @@ impl AccountAPI for BinanceConnector {
         match self.client.signed_request("margin/account", &params).await {
             Ok(response) => {
                 tracing::debug!("Margin account response received, parsing...");
-                parse_margin_account_from_json_with_prices(response, &self.client).await
+                let binance_account = parse_margin_account_from_json_with_prices(response, &self.client).await?;
+                Ok(binance_account.into())
             }
             Err(e) => {
                 tracing::info!("Margin account request failed: {:?}", e);
@@ -99,18 +128,21 @@ impl AccountAPI for BinanceConnector {
     }
 
     async fn get_futures_account(&self, account_type: FuturesType) -> Result<FuturesAccount, ExchangeError> {
-        match account_type {
-            FuturesType::USDM => {
+        let binance_type: BinanceFuturesType = account_type.into();
+        match binance_type {
+            BinanceFuturesType::USDM => {
                 // USD-M Futures account
                 let params = HashMap::new();
                 let response = self.client.signed_request("fapi/v2/account", &params).await?;
-                parse_futures_account_from_json_with_prices(response, &self.client, account_type).await
+                let binance_account = parse_futures_account_from_json_with_prices(response, &self.client, binance_type).await?;
+                Ok(binance_account.into())
             }
-            FuturesType::COINM => {
+            BinanceFuturesType::COINM => {
                 // COIN-M Futures account  
                 let params = HashMap::new();
                 let response = self.client.signed_request("dapi/v1/account", &params).await?;
-                parse_futures_account_from_json_with_prices(response, &self.client, account_type).await
+                let binance_account = parse_futures_account_from_json_with_prices(response, &self.client, binance_type).await?;
+                Ok(binance_account.into())
             }
         }
     }
@@ -119,7 +151,7 @@ impl AccountAPI for BinanceConnector {
         // Fetch all account types in parallel for better performance
         let spot_future = self.get_spot_account();
         let margin_future = self.get_margin_account();
-        let isolated_margin_future = self.get_isolated_margin_accounts();
+        // Note: isolated margin not included in common AccountBalances type
         let futures_usdm_future = self.get_futures_account(FuturesType::USDM);
         let futures_coinm_future = self.get_futures_account(FuturesType::COINM);
         let earn_future = self.get_savings_balances();
@@ -142,15 +174,7 @@ impl AccountAPI for BinanceConnector {
             }
         };
 
-        // Fetch isolated margin accounts (optional)
-        let isolated_margin = match isolated_margin_future.await {
-            Ok(accounts) if !accounts.is_empty() => Some(accounts),
-            Ok(_) => None,
-            Err(e) => {
-                info!("Isolated margin accounts not available: {:?}", e);
-                None
-            }
-        };
+        // Skip isolated margin as it's not in common AccountBalances
 
         // Fetch futures accounts (optional)
         let futures_usdm = match futures_usdm_future.await {
@@ -192,11 +216,7 @@ impl AccountAPI for BinanceConnector {
             total_usd_value += account.total_net_value;
         }
 
-        if let Some(ref accounts) = isolated_margin {
-            for account in accounts {
-                total_usd_value += account.total_net_value;
-            }
-        }
+        // Skip isolated margin totals
 
         if let Some(ref account) = futures_usdm {
             total_usd_value += account.total_margin_balance;
@@ -217,35 +237,40 @@ impl AccountAPI for BinanceConnector {
         Ok(AccountBalances {
             spot,
             margin,
-            isolated_margin,
             futures_usdm,
             futures_coinm,
-            earn,
-            total_usd_value,
-            total_btc_value,
-        })
-    }
+        total_usd_value,
+        total_btc_value,
+    })
+}
 
-    async fn get_asset_balance(&self, asset: &str, wallet_type: WalletType) -> Result<AssetBalance, ExchangeError> {
-        match wallet_type {
-            WalletType::Spot => {
-                let account = self.get_spot_account().await?;
+async fn get_asset_balance(&self, asset: &str, wallet_type: WalletType) -> Result<AssetBalance, ExchangeError> {
+    match wallet_type {
+        WalletType::Spot => {
+            let account = self.get_spot_account().await?;
+            account.balances.into_iter()
+                .find(|b| b.asset == asset)
+                .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
+        }
+        WalletType::Margin => {
+            let account = self.get_margin_account().await?;
+            account.balances.into_iter()
+                .find(|b| b.asset == asset)
+                .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
+        }
+            WalletType::Futures => {
+                // Default to USD-M futures for now
+                let account = self.get_futures_account(FuturesType::USDM).await?;
                 account.balances.into_iter()
                     .find(|b| b.asset == asset)
                     .ok_or_else(|| ExchangeError::SymbolNotFound(format!("Asset {} not found", asset)))
             }
-            _ => Err(ExchangeError::NotSupported(format!("{:?} wallet not supported", wallet_type)))
-        }
+        _ => Err(ExchangeError::NotSupported(format!("{:?} wallet not supported", wallet_type)))
     }
+}
 }
 
 impl BinanceConnector {
-    // Helper method to get isolated margin accounts
-    async fn get_isolated_margin_accounts(&self) -> Result<Vec<IsolatedMarginAccount>, ExchangeError> {
-        let params = HashMap::new();
-        let response = self.client.signed_request("sapi/v1/margin/isolated/account", &params).await?;
-        super::converters::parse_isolated_margin_accounts_from_json(response, &self.client).await
-    }
 
     // Helper method to get Savings/Earn balances
     async fn get_savings_balances(&self) -> Result<Vec<AssetBalance>, ExchangeError> {
@@ -286,7 +311,7 @@ impl BinanceConnector {
                                 total: total_amount,
                                 usd_value,
                                 btc_value: None,
-                                wallet_type: WalletType::Earn,
+                                wallet_type: WalletType::Spot, // Map Earn to Spot for compatibility
                             });
                         }
                     }
@@ -332,7 +357,7 @@ impl BinanceConnector {
                                 total: amount,
                                 usd_value,
                                 btc_value: None,
-                                wallet_type: WalletType::Earn,
+                                wallet_type: WalletType::Spot, // Map Earn to Spot for compatibility
                             });
                         }
                     }
@@ -427,13 +452,23 @@ impl OrderAPI for BinanceConnector {
     async fn cancel_order(&self, order_id: &str, symbol: &str, wallet_type: WalletType) -> Result<Order, ExchangeError> {
         match wallet_type {
             WalletType::Spot => {
-                Err(ExchangeError::NotSupported("Order cancellation not yet implemented".to_string()))
+                let mut params = HashMap::new();
+                params.insert("symbol".to_string(), symbol.to_string());
+                params.insert("orderId".to_string(), order_id.to_string());
+
+                match self.client.signed_request("order", &params).await {
+                    Ok(response) => parse_single_order_from_json(response, wallet_type),
+                    Err(ExchangeError::ApiError(msg)) if msg.contains("-2011") => {
+                        Err(ExchangeError::OrderNotFound(format!("Order {} not found for symbol {}", order_id, symbol)))
+                    }
+                    Err(e) => Err(e)
+                }
             }
-            _ => Err(ExchangeError::NotSupported(format!("{:?} wallet not supported", wallet_type)))
+            _ => Err(ExchangeError::NotSupported(format!("{:?} wallet not supported for order cancellation", wallet_type)))
         }
     }
 
-    async fn cancel_all_orders(&self, symbol: Option<&str>, wallet_type: WalletType) -> Result<Vec<Order>, ExchangeError> {
+    async fn cancel_all_orders(&self, _symbol: Option<&str>, _wallet_type: WalletType) -> Result<Vec<Order>, ExchangeError> {
         Err(ExchangeError::NotSupported("Bulk order cancellation not yet implemented".to_string()))
     }
 }
@@ -442,25 +477,151 @@ impl OrderAPI for BinanceConnector {
 impl TradeExecutionAPI for BinanceConnector {
     async fn place_market_order(
         &self,
-        _symbol: &str,
-        _side: OrderSide,
-        _quantity: Option<Decimal>,
-        _quote_quantity: Option<Decimal>,
-        _wallet_type: WalletType,
+        symbol: &str,
+        side: OrderSide,
+        quantity: Option<Decimal>,
+        quote_quantity: Option<Decimal>,
+        wallet_type: WalletType,
     ) -> Result<Order, ExchangeError> {
-        Err(ExchangeError::NotSupported("Market orders not yet implemented".to_string()))
+        if wallet_type != WalletType::Spot {
+            return Err(ExchangeError::NotSupported(format!("{:?} wallet not supported for market orders", wallet_type)));
+        }
+
+        // Validate trading symbol exists (financial safety check)
+        self.get_symbol_info(symbol).await?;
+
+        // Validate order parameters
+        if quantity.is_none() && quote_quantity.is_none() {
+            return Err(ExchangeError::InvalidOrder("Either quantity or quote_quantity must be specified".to_string()));
+        }
+
+        if quantity.is_some() && quote_quantity.is_some() {
+            return Err(ExchangeError::InvalidOrder("Cannot specify both quantity and quote_quantity".to_string()));
+        }
+
+        let mut params = HashMap::new();
+        params.insert("symbol".to_string(), symbol.to_uppercase());
+        params.insert("side".to_string(), match side {
+            OrderSide::Buy => "BUY".to_string(),
+            OrderSide::Sell => "SELL".to_string(),
+        });
+        params.insert("type".to_string(), "MARKET".to_string());
+
+        if let Some(qty) = quantity {
+            if qty <= Decimal::ZERO {
+                return Err(ExchangeError::InvalidOrder("Quantity must be greater than zero".to_string()));
+            }
+            params.insert("quantity".to_string(), qty.to_string());
+        }
+
+        if let Some(quote_qty) = quote_quantity {
+            if quote_qty <= Decimal::ZERO {
+                return Err(ExchangeError::InvalidOrder("Quote quantity must be greater than zero".to_string()));
+            }
+            params.insert("quoteOrderQty".to_string(), quote_qty.to_string());
+        }
+
+        // Check balance before placing order
+        if side == OrderSide::Sell {
+            if let Some(qty) = quantity {
+                let base_asset = symbol.trim_end_matches("USDT").trim_end_matches("USDC").trim_end_matches("BUSD");
+                match self.get_asset_balance(base_asset, WalletType::Spot).await {
+                    Ok(balance) => {
+                        if balance.free < qty {
+                            return Err(ExchangeError::InsufficientBalance(
+                                format!("Insufficient {} balance. Required: {}, Available: {}", base_asset, qty, balance.free)
+                            ));
+                        }
+                    }
+                    Err(_) => {} // Continue if we can't check balance
+                }
+            }
+        }
+
+        match self.client.signed_request("order", &params).await {
+            Ok(response) => parse_single_order_from_json(response, wallet_type),
+            Err(e) => Err(e)
+        }
     }
 
     async fn place_limit_order(
         &self,
-        _symbol: &str,
-        _side: OrderSide,
-        _price: Decimal,
-        _quantity: Decimal,
-        _time_in_force: TimeInForce,
-        _wallet_type: WalletType,
+        symbol: &str,
+        side: OrderSide,
+        price: Decimal,
+        quantity: Decimal,
+        time_in_force: TimeInForce,
+        wallet_type: WalletType,
     ) -> Result<Order, ExchangeError> {
-        Err(ExchangeError::NotSupported("Limit orders not yet implemented".to_string()))
+        if wallet_type != WalletType::Spot {
+            return Err(ExchangeError::NotSupported(format!("{:?} wallet not supported for limit orders", wallet_type)));
+        }
+
+        // Validate trading symbol exists (financial safety check)
+        self.get_symbol_info(symbol).await?;
+
+        // Validate order parameters
+        if price <= Decimal::ZERO {
+            return Err(ExchangeError::InvalidOrder("Price must be greater than zero".to_string()));
+        }
+        if quantity <= Decimal::ZERO {
+            return Err(ExchangeError::InvalidOrder("Quantity must be greater than zero".to_string()));
+        }
+
+        let mut params = HashMap::new();
+        params.insert("symbol".to_string(), symbol.to_uppercase());
+        params.insert("side".to_string(), match side {
+            OrderSide::Buy => "BUY".to_string(),
+            OrderSide::Sell => "SELL".to_string(),
+        });
+        params.insert("type".to_string(), "LIMIT".to_string());
+        params.insert("price".to_string(), price.to_string());
+        params.insert("quantity".to_string(), quantity.to_string());
+        params.insert("timeInForce".to_string(), match time_in_force {
+            TimeInForce::GTC => "GTC".to_string(),
+            TimeInForce::IOC => "IOC".to_string(),
+            TimeInForce::FOK => "FOK".to_string(),
+            TimeInForce::GTX => "GTX".to_string(),
+        });
+
+        // Check balance before placing order
+        let asset_to_check = if side == OrderSide::Buy {
+            // For buy orders, check quote asset (usually USDT)
+            if symbol.ends_with("USDT") {
+                "USDT"
+            } else if symbol.ends_with("USDC") {
+                "USDC"
+            } else if symbol.ends_with("BUSD") {
+                "BUSD"
+            } else {
+                return Err(ExchangeError::InvalidParameter(format!("Unsupported trading pair: {}", symbol)));
+            }
+        } else {
+            // For sell orders, check base asset
+            symbol.trim_end_matches("USDT").trim_end_matches("USDC").trim_end_matches("BUSD")
+        };
+
+        let required_amount = if side == OrderSide::Buy {
+            price * quantity // Quote asset amount needed
+        } else {
+            quantity // Base asset amount needed
+        };
+
+        match self.get_asset_balance(asset_to_check, WalletType::Spot).await {
+            Ok(balance) => {
+                if balance.free < required_amount {
+                    return Err(ExchangeError::InsufficientBalance(
+                        format!("Insufficient {} balance. Required: {}, Available: {}", asset_to_check, required_amount, balance.free)
+                    ));
+                }
+            }
+            Err(_) => {} // Continue if we can't check balance
+        }
+
+        match self.client.signed_request("order", &params).await {
+            Ok(response) => parse_single_order_from_json(response, wallet_type),
+            Err(e) => Err(e)
+        }
     }
 
     async fn place_stop_loss_order(

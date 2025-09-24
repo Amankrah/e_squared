@@ -13,7 +13,6 @@ use crate::models::{
         WalletBalanceResponse, WalletSummaryResponse, WalletTypeBalance,
     },
 };
-use crate::utils::errors::AppError;
 
 use std::collections::HashMap;
 use rust_decimal::Decimal;

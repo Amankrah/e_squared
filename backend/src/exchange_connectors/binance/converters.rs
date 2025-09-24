@@ -2,9 +2,13 @@ use chrono::{DateTime, Utc, TimeZone};
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use serde_json::Value;
-use tracing::{error, warn, debug};
-use crate::exchange_connectors::types::*;
-use crate::exchange_connectors::ExchangeError;
+use tracing::{warn, debug};
+use crate::exchange_connectors::{
+    ExchangeError,
+    shared_types::{Ticker, OrderBook, OrderBookLevel, Trade, Kline, KlineInterval, ExchangeInfo, SymbolInfo},
+    common_types::{Order, OrderSide, OrderType, OrderStatus, TimeInForce, WalletType},
+};
+use super::types::*;
 use super::api_client::BinanceApiClient;
 
 pub fn parse_decimal(s: &str) -> Result<Decimal, ExchangeError> {
@@ -38,9 +42,9 @@ pub fn convert_kline_interval_to_string(interval: &KlineInterval) -> &'static st
     }
 }
 
-pub fn parse_spot_account_from_json(json: Value) -> Result<SpotAccount, ExchangeError> {
+pub fn parse_spot_account_from_json(json: Value) -> Result<BinanceSpotAccount, ExchangeError> {
     let mut balances = Vec::new();
-    let mut total_usd_value = Decimal::ZERO;
+    let total_usd_value = Decimal::ZERO;
 
     if let Some(balance_array) = json.get("balances").and_then(|v| v.as_array()) {
         for balance in balance_array {
@@ -53,14 +57,14 @@ pub fn parse_spot_account_from_json(json: Value) -> Result<SpotAccount, Exchange
             let total = free + locked;
 
             if total > Decimal::ZERO {
-                balances.push(AssetBalance {
+                balances.push(BinanceAssetBalance {
                     asset: asset.to_string(),
                     free,
                     locked,
                     total,
                     usd_value: None, // TODO: Add price conversion
                     btc_value: None,
-                    wallet_type: WalletType::Spot,
+                    wallet_type: BinanceWalletType::Spot,
                 });
             }
         }
@@ -83,7 +87,7 @@ pub fn parse_spot_account_from_json(json: Value) -> Result<SpotAccount, Exchange
         .map(parse_timestamp)
         .unwrap_or_else(|| Utc::now());
 
-    Ok(SpotAccount {
+    Ok(BinanceSpotAccount {
         balances,
         total_usd_value: Some(total_usd_value),
         total_btc_value: None,
@@ -99,7 +103,7 @@ pub fn parse_spot_account_from_json(json: Value) -> Result<SpotAccount, Exchange
 pub async fn parse_spot_account_from_json_with_prices(
     json: Value,
     client: &BinanceApiClient
-) -> Result<SpotAccount, ExchangeError> {
+) -> Result<BinanceSpotAccount, ExchangeError> {
     let mut balances = Vec::new();
     let mut total_usd_value = Decimal::ZERO;
 
@@ -142,14 +146,14 @@ pub async fn parse_spot_account_from_json_with_prices(
                     total_usd_value += value;
                 }
 
-                balances.push(AssetBalance {
+                balances.push(BinanceAssetBalance {
                     asset: asset.to_string(),
                     free,
                     locked,
                     total,
                     usd_value,
                     btc_value: None, // TODO: Add BTC conversion if needed
-                    wallet_type: WalletType::Spot,
+                    wallet_type: BinanceWalletType::Spot,
                 });
             }
         }
@@ -172,7 +176,7 @@ pub async fn parse_spot_account_from_json_with_prices(
         .map(parse_timestamp)
         .unwrap_or_else(|| Utc::now());
 
-    Ok(SpotAccount {
+    Ok(BinanceSpotAccount {
         balances,
         total_usd_value: Some(total_usd_value),
         total_btc_value: None,
@@ -188,7 +192,7 @@ pub async fn parse_spot_account_from_json_with_prices(
 pub async fn parse_margin_account_from_json_with_prices(
     json: Value,
     client: &BinanceApiClient
-) -> Result<MarginAccount, ExchangeError> {
+) -> Result<BinanceMarginAccount, ExchangeError> {
     let mut balances = Vec::new();
     let mut total_asset_value = Decimal::ZERO;
     let mut total_liability_value = Decimal::ZERO;
@@ -234,14 +238,14 @@ pub async fn parse_margin_account_from_json_with_prices(
                     }
                 }
 
-                balances.push(AssetBalance {
+                balances.push(BinanceAssetBalance {
                     asset: asset.to_string(),
                     free,
                     locked,
                     total,
                     usd_value,
                     btc_value: None,
-                    wallet_type: WalletType::Margin,
+                    wallet_type: BinanceWalletType::Margin,
                 });
             }
         }
@@ -257,7 +261,7 @@ pub async fn parse_margin_account_from_json_with_prices(
     let can_trade = json.get("tradeEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
     let can_borrow = json.get("borrowEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
-    Ok(MarginAccount {
+    Ok(BinanceMarginAccount {
         balances,
         total_asset_value,
         total_liability_value,
@@ -274,7 +278,7 @@ pub async fn parse_margin_account_from_json_with_prices(
 pub async fn parse_isolated_margin_accounts_from_json(
     json: Value,
     client: &BinanceApiClient
-) -> Result<Vec<IsolatedMarginAccount>, ExchangeError> {
+) -> Result<Vec<BinanceIsolatedMarginAccount>, ExchangeError> {
     let mut isolated_accounts = Vec::new();
 
     if let Some(assets) = json.get("assets").and_then(|v| v.as_array()) {
@@ -320,14 +324,14 @@ pub async fn parse_isolated_margin_accounts_from_json(
                         }
                     }
 
-                    balances.push(AssetBalance {
+                    balances.push(BinanceAssetBalance {
                         asset: asset.to_string(),
                         free,
                         locked,
                         total,
                         usd_value,
                         btc_value: None,
-                        wallet_type: WalletType::IsolatedMargin,
+                        wallet_type: BinanceWalletType::Margin, // Map isolated margin to margin for compatibility
                     });
                 }
             }
@@ -368,14 +372,14 @@ pub async fn parse_isolated_margin_accounts_from_json(
                         }
                     }
 
-                    balances.push(AssetBalance {
+                    balances.push(BinanceAssetBalance {
                         asset: asset.to_string(),
                         free,
                         locked,
                         total,
                         usd_value,
                         btc_value: None,
-                        wallet_type: WalletType::IsolatedMargin,
+                        wallet_type: BinanceWalletType::Margin, // Map isolated margin to margin for compatibility
                     });
                 }
             }
@@ -395,7 +399,7 @@ pub async fn parse_isolated_margin_accounts_from_json(
                 let can_liquidate = asset_info.get("liquidatePrice").and_then(|v| v.as_str()).is_some();
                 let can_trade = asset_info.get("tradeEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
-                isolated_accounts.push(IsolatedMarginAccount {
+                isolated_accounts.push(BinanceIsolatedMarginAccount {
                     symbol: symbol.to_string(),
                     balances,
                     total_asset_value,
@@ -418,8 +422,8 @@ pub async fn parse_isolated_margin_accounts_from_json(
 pub async fn parse_futures_account_from_json_with_prices(
     json: Value,
     client: &BinanceApiClient,
-    account_type: FuturesType,
-) -> Result<FuturesAccount, ExchangeError> {
+    account_type: BinanceFuturesType,
+) -> Result<BinanceFuturesAccount, ExchangeError> {
     let mut balances = Vec::new();
     let mut positions = Vec::new();
 
@@ -453,14 +457,14 @@ pub async fn parse_futures_account_from_json_with_prices(
                     }
                 }
 
-                balances.push(AssetBalance {
+                balances.push(BinanceAssetBalance {
                     asset: asset.to_string(),
                     free: wallet_balance,
                     locked: Decimal::ZERO,
                     total: wallet_balance,
                     usd_value,
                     btc_value: None,
-                    wallet_type: WalletType::Futures,
+                    wallet_type: BinanceWalletType::Futures,
                 });
             }
         }
@@ -481,15 +485,15 @@ pub async fn parse_futures_account_from_json_with_prices(
             let unrealized_pnl = parse_decimal(unrealized_pnl_str)?;
 
             if position_amount != Decimal::ZERO {
-                positions.push(FuturesPosition {
+                positions.push(BinanceFuturesPosition {
                     symbol,
-                    position_side: if position_amount > Decimal::ZERO { PositionSide::Long } else { PositionSide::Short },
+                    position_side: if position_amount > Decimal::ZERO { BinancePositionSide::Long } else { BinancePositionSide::Short },
                     position_amount,
                     entry_price,
                     mark_price,
                     unrealized_pnl,
                     realized_pnl: Decimal::ZERO,
-                    margin_type: MarginType::Cross, // Default, could be parsed
+                    margin_type: BinanceMarginType::Cross, // Default, could be parsed
                     isolated_margin: None,
                     leverage: 1, // Default, could be parsed
                     liquidation_price: None,
@@ -513,7 +517,7 @@ pub async fn parse_futures_account_from_json_with_prices(
     let can_deposit = json.get("canDeposit").and_then(|v| v.as_bool()).unwrap_or(true);
     let can_withdraw = json.get("canWithdraw").and_then(|v| v.as_bool()).unwrap_or(true);
 
-    Ok(FuturesAccount {
+    Ok(BinanceFuturesAccount {
         account_type,
         balances,
         positions,

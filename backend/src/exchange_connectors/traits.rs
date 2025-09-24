@@ -2,8 +2,9 @@ use async_trait::async_trait;
 use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
 use crate::exchange_connectors::{
-    types::*,
-    errors::ExchangeError,
+    shared_types::*,
+    common_types::*,
+    ExchangeError,
 };
 
 #[async_trait]

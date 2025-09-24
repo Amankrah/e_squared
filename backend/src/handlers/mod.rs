@@ -6,7 +6,6 @@ pub mod exchange_management;
 pub mod exchange_optional;
 pub mod dca_strategy_management;
 pub mod strategy_templates_handler;
-pub mod exchange_connector_handler;
 pub mod backtesting_handler;
 
 pub use auth::*;

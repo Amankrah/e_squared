@@ -137,10 +137,64 @@ impl BinanceApiClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(ExchangeError::ApiError(format!("Binance API error: {} - {}", status, error_text)));
+            return Err(self.parse_binance_error(status.as_u16(), &error_text));
         }
 
         let json: Value = response.json().await?;
         Ok(json)
+    }
+
+    fn parse_binance_error(&self, status_code: u16, error_text: &str) -> ExchangeError {
+        // Try to parse error_text as JSON to get Binance error codes
+        if let Ok(error_json) = serde_json::from_str::<Value>(error_text) {
+            if let Some(error_code) = error_json.get("code").and_then(|c| c.as_i64()) {
+                let msg = error_json.get("msg")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Unknown error")
+                    .to_string();
+
+                return match error_code {
+                    // Authentication errors
+                    -1022 | -2014 => ExchangeError::InvalidApiKey,
+                    -1021 => ExchangeError::AuthenticationError(format!("Timestamp outside of recvWindow: {}", msg)),
+                    -2015 => ExchangeError::AuthenticationError(format!("Invalid API key format: {}", msg)),
+                    
+                    // Order related errors
+                    -1013 => ExchangeError::InvalidOrder(format!("Invalid quantity: {}", msg)),
+                    -1102 => ExchangeError::InvalidParameter(format!("Mandatory parameter missing: {}", msg)),
+                    -2010 => ExchangeError::InvalidOrder(format!("New order rejected: {}", msg)),
+                    -2011 => ExchangeError::OrderNotFound(format!("Order not found: {}", msg)),
+                    
+                    // Balance related errors
+                    -2019 => ExchangeError::InsufficientBalance(format!("Margin is insufficient: {}", msg)),
+                    
+                    // Symbol/market errors
+                    -1121 => ExchangeError::SymbolNotFound(format!("Invalid symbol: {}", msg)),
+                    -1100 => ExchangeError::InvalidParameter(format!("Illegal characters in parameter: {}", msg)),
+                    
+                    // Rate limiting or balance (error code -1003 can mean both)
+                    -1003 => {
+                        if msg.to_lowercase().contains("rate") || msg.to_lowercase().contains("limit") {
+                            ExchangeError::RateLimitExceeded(format!("Too many requests: {}", msg))
+                        } else {
+                            ExchangeError::InsufficientBalance(format!("Balance insufficient: {}", msg))
+                        }
+                    },
+                    
+                    // Default to ApiError for other codes
+                    _ => ExchangeError::ApiError(format!("Binance error {}: {}", error_code, msg))
+                };
+            }
+        }
+
+        // Handle by HTTP status code when JSON parsing fails
+        match status_code {
+            401 | 403 => ExchangeError::AuthenticationError(format!("Authentication failed: {}", error_text)),
+            429 => ExchangeError::RateLimitExceeded(format!("Rate limit exceeded: {}", error_text)),
+            503 => ExchangeError::Maintenance,
+            404 => ExchangeError::Unknown(format!("Endpoint not found: {}", error_text)),
+            400 => ExchangeError::InvalidParameter(format!("Bad request: {}", error_text)),
+            _ => ExchangeError::Unknown(format!("HTTP {}: {}", status_code, error_text))
+        }
     }
 }

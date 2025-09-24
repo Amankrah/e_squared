@@ -359,11 +359,11 @@ fn configure_strategy_template_routes(cfg: &mut web::ServiceConfig) {
 fn configure_exchange_connector_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/exchange-accounts")
-            .route("/all", web::get().to(handlers::exchange_connector_handler::get_all_accounts))
-            .route("/spot", web::get().to(handlers::exchange_connector_handler::get_spot_account))
-            .route("/margin", web::get().to(handlers::exchange_connector_handler::get_margin_account))
-            .route("/futures", web::get().to(handlers::exchange_connector_handler::get_futures_account))
-            .route("/test", web::get().to(handlers::exchange_connector_handler::test_exchange_connection))
+            .route("/all", web::get().to(exchange_management::get_account_by_type))
+            .route("/spot", web::get().to(exchange_management::get_account_by_type))
+            .route("/margin", web::get().to(exchange_management::get_account_by_type))
+            .route("/futures", web::get().to(exchange_management::get_account_by_type))
+            .route("/test", web::get().to(exchange_management::test_connection_status))
     );
 }
 

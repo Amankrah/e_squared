@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use crate::strategies::{Strategy, TradeSignal};
 use crate::strategies::indicators;
-use crate::exchange_connectors::types::Kline;
+use crate::exchange_connectors::Kline;
 use crate::utils::errors::AppError;
 
 /// Dollar Cost Averaging Strategy

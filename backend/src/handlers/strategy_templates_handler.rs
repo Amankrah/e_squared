@@ -8,7 +8,7 @@ use tracing::{info, error};
 use crate::services::strategy_templates::{StrategyTemplateService, StrategyTemplate};
 use crate::backtesting::{BacktestEngine, BacktestConfig, BacktestResult};
 use crate::strategies::{StrategyRegistry, StrategyInfo};
-use crate::exchange_connectors::types::KlineInterval;
+use crate::exchange_connectors::KlineInterval;
 use crate::utils::errors::AppError;
 use crate::handlers::auth::Claims;
 use crate::models::dca_strategy::DCAStrategyType;

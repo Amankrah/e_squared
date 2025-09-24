@@ -65,8 +65,6 @@ pub struct CreateExchangeConnectionRequest {
     pub api_key: String,
     #[validate(length(min = 1, max = 500))]
     pub api_secret: String,
-    #[validate(length(min = 1, max = 500))]
-    pub passphrase: Option<String>, // Required for some exchanges like KuCoin, OKX
     #[validate(length(min = 8))]
     pub password: String, // User's password for encryption
 }
@@ -80,8 +78,6 @@ pub struct UpdateExchangeConnectionRequest {
     pub api_key: Option<String>,
     #[validate(length(min = 1, max = 500))]
     pub api_secret: Option<String>,
-    #[validate(length(min = 1, max = 500))]
-    pub passphrase: Option<String>, // Update passphrase if needed
     #[validate(length(min = 8))]
     pub password: String, // User's password for encryption/decryption
 }
@@ -118,4 +114,5 @@ impl From<Model> for ExchangeConnectionResponse {
 }
 
 // Re-export exchange connector types for convenience
+#[allow(unused_imports)]
 pub use crate::exchange_connectors::{Exchange as SupportedExchange, ExchangeCredentials};

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use crate::exchange_connectors::types::{Kline, KlineInterval};
+use crate::exchange_connectors::{Kline, KlineInterval};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BacktestConfig {

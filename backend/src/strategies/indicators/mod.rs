@@ -1,5 +1,5 @@
 use rust_decimal::{Decimal, prelude::*};
-use crate::exchange_connectors::types::Kline;
+use crate::exchange_connectors::Kline;
 
 /// Simple Moving Average
 pub fn sma(data: &[Kline], period: usize) -> Option<Decimal> {

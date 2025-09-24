@@ -69,7 +69,6 @@ pub async fn create_exchange_connection(
     let credentials = ExchangeCredentials {
         api_key: body.api_key.clone(),
         api_secret: body.api_secret.clone(),
-        passphrase: body.passphrase.clone(),
     };
 
     let exchange = Exchange::from_str(&body.exchange_name)
@@ -96,12 +95,7 @@ pub async fn create_exchange_connection(
     let encrypted_api_secret = encryption_service
         .encrypt_api_credentials(&body.api_secret, &body.password, &user_id_str)?;
 
-    // Encrypt passphrase if provided
-    let encrypted_passphrase = if let Some(passphrase) = &body.passphrase {
-        Some(encryption_service.encrypt_api_credentials(passphrase, &body.password, &user_id_str)?)
-    } else {
-        None
-    };
+    // Passphrase support removed - focusing on API key/secret only
 
     // Prepare connection data - use existing ID if updating, new ID if creating
     let (connection_id, created_at_timestamp) = if let Some(ref existing) = existing_connection {
@@ -125,13 +119,10 @@ pub async fn create_exchange_connection(
     let stored_display_name = body.display_name.clone();
     let stored_encrypted_api_key = encrypted_api_key.ciphertext.clone();
     let stored_encrypted_api_secret = encrypted_api_secret.ciphertext.clone();
-    let stored_encrypted_passphrase = encrypted_passphrase.as_ref().map(|p| p.ciphertext.clone());
     let stored_api_key_nonce = encrypted_api_key.nonce.clone();
     let stored_api_secret_nonce = encrypted_api_secret.nonce.clone();
-    let stored_passphrase_nonce = encrypted_passphrase.as_ref().map(|p| p.nonce.clone());
     let stored_api_key_salt = encrypted_api_key.salt.clone();
     let stored_api_secret_salt = encrypted_api_secret.salt.clone();
-    let stored_passphrase_salt = encrypted_passphrase.as_ref().map(|p| p.salt.clone());
     let stored_created_at = created_at_timestamp;
     let stored_updated_at = Utc::now();
 
@@ -142,13 +133,13 @@ pub async fn create_exchange_connection(
         display_name: Set(stored_display_name.clone()),
         encrypted_api_key: Set(stored_encrypted_api_key.clone()),
         encrypted_api_secret: Set(stored_encrypted_api_secret.clone()),
-        encrypted_passphrase: Set(stored_encrypted_passphrase.clone()),
+        encrypted_passphrase: Set(None),
         api_key_nonce: Set(stored_api_key_nonce.clone()),
         api_secret_nonce: Set(stored_api_secret_nonce.clone()),
-        passphrase_nonce: Set(stored_passphrase_nonce.clone()),
+        passphrase_nonce: Set(None),
         api_key_salt: Set(stored_api_key_salt.clone()),
         api_secret_salt: Set(stored_api_secret_salt.clone()),
-        passphrase_salt: Set(stored_passphrase_salt.clone()),
+        passphrase_salt: Set(None),
         is_active: Set(true),
         last_sync: Set(None),
         connection_status: Set("connected".to_string()),
@@ -217,13 +208,13 @@ pub async fn create_exchange_connection(
                         display_name: stored_display_name,
                         encrypted_api_key: stored_encrypted_api_key,
                         encrypted_api_secret: stored_encrypted_api_secret,
-                        encrypted_passphrase: stored_encrypted_passphrase,
+                        encrypted_passphrase: None,
                         api_key_nonce: stored_api_key_nonce,
                         api_secret_nonce: stored_api_secret_nonce,
-                        passphrase_nonce: stored_passphrase_nonce,
+                        passphrase_nonce: None,
                         api_key_salt: stored_api_key_salt,
                         api_secret_salt: stored_api_secret_salt,
-                        passphrase_salt: stored_passphrase_salt,
+                        passphrase_salt: None,
                         is_active: true,
                         last_sync: None,
                         connection_status: "connected".to_string(),
@@ -431,7 +422,6 @@ pub async fn sync_exchange_balances(
     let credentials = ExchangeCredentials {
         api_key,
         api_secret,
-        passphrase: None, // TODO: Support passphrase for exchanges that require it
     };
 
     let exchange = Exchange::from_str(&connection.exchange_name)
@@ -475,22 +465,6 @@ pub async fn sync_exchange_balances(
         }
     }
 
-    if let Some(ref isolated_accounts) = account_balances.isolated_margin {
-        tracing::info!("ISOLATED MARGIN ACCOUNTS:");
-        tracing::info!("  Isolated Margin Account Count: {}", isolated_accounts.len());
-        for account in isolated_accounts {
-            tracing::info!("  Symbol: {}", account.symbol);
-            tracing::info!("    Total Asset Value: ${}", account.total_asset_value);
-            tracing::info!("    Total Liability Value: ${}", account.total_liability_value);
-            tracing::info!("    Total Net Value: ${}", account.total_net_value);
-            for balance in &account.balances {
-                if balance.total > rust_decimal::Decimal::ZERO {
-                    tracing::info!("      {}: free={}, locked={}, total={}, usd_value=${:?}",
-                        balance.asset, balance.free, balance.locked, balance.total, balance.usd_value);
-                }
-            }
-        }
-    }
 
     if let Some(ref futures) = account_balances.futures_usdm {
         tracing::info!("FUTURES USD-M ACCOUNT:");
@@ -518,16 +492,6 @@ pub async fn sync_exchange_balances(
         }
     }
 
-    if let Some(ref earn_balances) = account_balances.earn {
-        tracing::info!("EARN/SAVINGS BALANCES:");
-        tracing::info!("  Earn Balance Count: {}", earn_balances.len());
-        for balance in earn_balances {
-            if balance.total > rust_decimal::Decimal::ZERO {
-                tracing::info!("    {}: free={}, locked={}, total={}, usd_value=${:?}",
-                    balance.asset, balance.free, balance.locked, balance.total, balance.usd_value);
-            }
-        }
-    }
 
     tracing::info!("=== END ACCOUNT BALANCES DEBUG ===");
 
@@ -636,47 +600,7 @@ pub async fn sync_exchange_balances(
         }
     }
 
-    // Store isolated margin balances
-    if let Some(isolated_margin_accounts) = &account_balances.isolated_margin {
-        for isolated_account in isolated_margin_accounts {
-            for balance in &isolated_account.balances {
-                let wallet_balance_model = wallet_balance::ActiveModel {
-                    id: Set(Uuid::new_v4()),
-                    exchange_connection_id: Set(connection_id),
-                    wallet_type: Set("isolated_margin".to_string()),
-                    asset_symbol: Set(format!("{}_{}", isolated_account.symbol, balance.asset)),
-                    free_balance: Set(balance.free.to_string()),
-                    locked_balance: Set(balance.locked.to_string()),
-                    total_balance: Set(balance.total.to_string()),
-                    usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                    last_updated: Set(current_time),
-                    created_at: Set(current_time),
-                };
 
-                let _ = wallet_balance_model.insert(db.get_ref()).await;
-            }
-        }
-    }
-
-    // Store earn/savings balances
-    if let Some(earn_balances) = &account_balances.earn {
-        for balance in earn_balances {
-            let wallet_balance_model = wallet_balance::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                exchange_connection_id: Set(connection_id),
-                wallet_type: Set("earn".to_string()),
-                asset_symbol: Set(balance.asset.clone()),
-                free_balance: Set(balance.free.to_string()),
-                locked_balance: Set(balance.locked.to_string()),
-                total_balance: Set(balance.total.to_string()),
-                usd_value: Set(balance.usd_value.map(|v| v.to_string())),
-                last_updated: Set(current_time),
-                created_at: Set(current_time),
-            };
-
-            let _ = wallet_balance_model.insert(db.get_ref()).await;
-        }
-    }
 
     // Return live balance data and confirm it's now stored in database
     Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -688,10 +612,8 @@ pub async fn sync_exchange_balances(
         "accounts": {
             "spot": account_balances.spot,
             "margin": account_balances.margin,
-            "isolated_margin": account_balances.isolated_margin,
             "futures_usdm": account_balances.futures_usdm,
             "futures_coinm": account_balances.futures_coinm,
-            "earn": account_balances.earn,
         },
         "last_updated": now,
         "is_live": true
@@ -752,7 +674,6 @@ pub async fn get_live_wallet_balances(
     let credentials = ExchangeCredentials {
         api_key,
         api_secret,
-        passphrase: None,
     };
 
     let exchange = Exchange::from_str(&connection.exchange_name)
@@ -775,17 +696,11 @@ pub async fn get_live_wallet_balances(
     if let Some(ref margin) = account_balances.margin {
         tracing::info!("Margin balances found: {} assets", margin.balances.len());
     }
-    if let Some(ref isolated) = account_balances.isolated_margin {
-        tracing::info!("Isolated margin accounts found: {}", isolated.len());
-    }
     if let Some(ref futures_usdm) = account_balances.futures_usdm {
         tracing::info!("Futures USD-M balances found: {} assets", futures_usdm.balances.len());
     }
     if let Some(ref futures_coinm) = account_balances.futures_coinm {
         tracing::info!("Futures COIN-M balances found: {} assets", futures_coinm.balances.len());
-    }
-    if let Some(ref earn) = account_balances.earn {
-        tracing::info!("Earn balances found: {} assets", earn.len());
     }
     tracing::info!("=== END LIVE BALANCE FETCH DEBUG ===");
 
@@ -799,10 +714,8 @@ pub async fn get_live_wallet_balances(
         "accounts": {
             "spot": account_balances.spot,
             "margin": account_balances.margin,
-            "isolated_margin": account_balances.isolated_margin,
             "futures_usdm": account_balances.futures_usdm,
             "futures_coinm": account_balances.futures_coinm,
-            "earn": account_balances.earn,
         },
         "last_updated": chrono::Utc::now(),
         "is_live": true
@@ -939,10 +852,8 @@ pub async fn get_all_live_user_balances(
                     "accounts": {
                         "spot": account_balances.spot,
                         "margin": account_balances.margin,
-                        "isolated_margin": account_balances.isolated_margin,
                         "futures_usdm": account_balances.futures_usdm,
                         "futures_coinm": account_balances.futures_coinm,
-                        "earn": account_balances.earn,
                     },
                     "status": "connected",
                     "last_updated": chrono::Utc::now(),
@@ -979,7 +890,7 @@ async fn get_live_balances_for_connection(
     connection: &crate::models::exchange_connection::Model,
     password: &str,
     user_id: Uuid,
-) -> Result<crate::exchange_connectors::types::AccountBalances, AppError> {
+) -> Result<crate::exchange_connectors::common_types::AccountBalances, AppError> {
     // Decrypt the API credentials
     let encryption_service = EncryptionService::new();
     let user_id_str = user_id.to_string();
@@ -1006,7 +917,6 @@ async fn get_live_balances_for_connection(
     let credentials = ExchangeCredentials {
         api_key,
         api_secret,
-        passphrase: None,
     };
 
     let exchange = Exchange::from_str(&connection.exchange_name)
@@ -1018,6 +928,102 @@ async fn get_live_balances_for_connection(
     // Fetch live balance data from the exchange
     connector.get_all_balances().await
         .map_err(|e| AppError::ExternalServiceError(format!("Binance API Error: {}", e)))
+}
+
+/// Get specific account type data (spot/margin/futures) - replacement for exchange_connector_handler
+pub async fn get_account_by_type(
+    db: web::Data<DatabaseConnection>,
+    req: HttpRequest,
+    query: web::Query<serde_json::Value>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let account_type = path.into_inner();
+    
+    // Get user_id from query parameters for non-authenticated access
+    let user_id = if let Some(user_id) = req.extensions().get::<Uuid>() {
+        *user_id
+    } else {
+        // Try to get from query parameters
+        let user_id_str = query.get("user_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::BadRequest("user_id parameter required".to_string()))?;
+        
+        Uuid::parse_str(user_id_str)
+            .map_err(|_| AppError::BadRequest("Invalid user ID format".to_string()))?
+    };
+
+    let connections = ExchangeConnectionEntity::find()
+        .filter(exchange_connection::Column::UserId.eq(user_id))
+        .filter(exchange_connection::Column::IsActive.eq(true))
+        .all(db.get_ref())
+        .await
+        .map_err(AppError::DatabaseError)?;
+
+    let responses: Vec<serde_json::Value> = connections
+        .into_iter()
+        .map(|connection| {
+            serde_json::json!({
+                "connection_id": connection.id,
+                "exchange_name": connection.exchange_name,
+                "display_name": connection.display_name,
+                "account_type": account_type,
+                "status": "requires_sync",
+                "message": format!("Please sync this connection to view {} account data", account_type),
+                "last_update": connection.updated_at
+            })
+        })
+        .collect();
+
+    Ok(HttpResponse::Ok().json(responses))
+}
+
+/// Test exchange connection - replacement for exchange_connector_handler
+pub async fn test_connection_status(
+    db: web::Data<DatabaseConnection>,
+    req: HttpRequest,
+    query: web::Query<serde_json::Value>,
+) -> Result<HttpResponse, AppError> {
+    let connection_id_str = query.get("connection_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("connection_id parameter required".to_string()))?;
+
+    let connection_id = Uuid::parse_str(connection_id_str)
+        .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
+
+    // Get user_id from request extensions or query
+    let user_id = if let Some(user_id) = req.extensions().get::<Uuid>() {
+        *user_id
+    } else {
+        let user_id_str = query.get("user_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::BadRequest("user_id parameter required".to_string()))?;
+        
+        Uuid::parse_str(user_id_str)
+            .map_err(|_| AppError::BadRequest("Invalid user ID format".to_string()))?
+    };
+
+    let connection = ExchangeConnectionEntity::find_by_id(connection_id)
+        .one(db.get_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or_else(|| AppError::NotFound("Exchange connection not found".to_string()))?;
+
+    // Verify connection belongs to user
+    if connection.user_id != user_id {
+        return Err(AppError::Unauthorized("Access denied".to_string()));
+    }
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "connection_id": connection_id,
+        "exchange_name": connection.exchange_name,
+        "display_name": connection.display_name,
+        "status": connection.connection_status,
+        "is_active": connection.is_active,
+        "last_sync": connection.last_sync,
+        "last_error": connection.last_error,
+        "message": "Use the sync endpoint with your password to test live connection",
+        "tested_at": chrono::Utc::now()
+    })))
 }
 
 /// Get all wallet balances for all user's exchange connections

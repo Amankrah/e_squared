@@ -45,13 +45,11 @@ impl ExchangeFactory {
         exchange: Exchange,
         api_key: Option<String>,
         api_secret: Option<String>,
-        passphrase: Option<String>,
     ) -> Result<Arc<dyn FullExchangeAPI>, ExchangeError> {
         let credentials = if let (Some(key), Some(secret)) = (api_key, api_secret) {
             ExchangeCredentials {
                 api_key: key,
                 api_secret: secret,
-                passphrase,
             }
         } else {
             return Err(ExchangeError::InvalidApiKey);
