@@ -5,7 +5,7 @@ use std::env;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
-    dca_strategy_management,
+    dca_strategy_management, rsi_strategy_management, macd_strategy_management,
     AuthService
 };
 use crate::middleware::AuthMiddleware;
@@ -20,6 +20,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_session_routes)
             .configure(configure_exchange_routes)
             .configure(configure_dca_routes)
+            .configure(configure_rsi_routes)
+            .configure(configure_macd_routes)
             .configure(configure_strategy_template_routes)
             .configure(configure_exchange_connector_routes)
             .configure(configure_backtesting_routes)
@@ -140,6 +142,40 @@ fn configure_dca_routes(cfg: &mut web::ServiceConfig) {
             .route("/strategies/{strategy_id}", web::delete().to(dca_strategy_management::delete_dca_strategy))
             .route("/strategies/{strategy_id}/execute", web::post().to(dca_strategy_management::execute_dca_strategy))
             .route("/execution-stats", web::get().to(dca_strategy_management::get_execution_stats))
+    );
+}
+
+/// Configure RSI strategy routes
+fn configure_rsi_routes(cfg: &mut web::ServiceConfig) {
+    let jwt_secret = env::var("JWT_SECRET")
+        .expect("JWT_SECRET environment variable is required");
+
+    cfg.service(
+        web::scope("/rsi")
+            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
+            .route("/strategies", web::post().to(rsi_strategy_management::create_rsi_strategy))
+            .route("/strategies", web::get().to(rsi_strategy_management::get_rsi_strategies))
+            .route("/strategies/{strategy_id}", web::get().to(rsi_strategy_management::get_rsi_strategy))
+            .route("/strategies/{strategy_id}", web::put().to(rsi_strategy_management::update_rsi_strategy))
+            .route("/strategies/{strategy_id}", web::delete().to(rsi_strategy_management::delete_rsi_strategy))
+            .route("/execution-stats", web::get().to(rsi_strategy_management::get_rsi_execution_stats))
+    );
+}
+
+/// Configure MACD strategy routes
+fn configure_macd_routes(cfg: &mut web::ServiceConfig) {
+    let jwt_secret = env::var("JWT_SECRET")
+        .expect("JWT_SECRET environment variable is required");
+
+    cfg.service(
+        web::scope("/macd")
+            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
+            .route("/strategies", web::post().to(macd_strategy_management::create_macd_strategy))
+            .route("/strategies", web::get().to(macd_strategy_management::get_macd_strategies))
+            .route("/strategies/{strategy_id}", web::get().to(macd_strategy_management::get_macd_strategy))
+            .route("/strategies/{strategy_id}", web::put().to(macd_strategy_management::update_macd_strategy))
+            .route("/strategies/{strategy_id}", web::delete().to(macd_strategy_management::delete_macd_strategy))
+            .route("/execution-stats", web::get().to(macd_strategy_management::get_macd_execution_stats))
     );
 }
 
