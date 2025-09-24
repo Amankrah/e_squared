@@ -46,8 +46,10 @@ pub struct Kline {
     pub low: Decimal,
     pub close: Decimal,
     pub volume: Decimal,
-    pub quote_volume: Decimal,
-    pub trades_count: u64,
+    pub quote_asset_volume: Decimal,
+    pub number_of_trades: i64,
+    pub taker_buy_base_asset_volume: Decimal,
+    pub taker_buy_quote_asset_volume: Decimal,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -68,6 +70,57 @@ pub enum KlineInterval {
     ThreeDays,
     OneWeek,
     OneMonth,
+}
+
+impl KlineInterval {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "1s" => Some(Self::OneSecond),
+            "1m" => Some(Self::OneMinute),
+            "3m" => Some(Self::ThreeMinutes),
+            "5m" => Some(Self::FiveMinutes),
+            "15m" => Some(Self::FifteenMinutes),
+            "30m" => Some(Self::ThirtyMinutes),
+            "1h" => Some(Self::OneHour),
+            "2h" => Some(Self::TwoHours),
+            "4h" => Some(Self::FourHours),
+            "6h" => Some(Self::SixHours),
+            "8h" => Some(Self::EightHours),
+            "12h" => Some(Self::TwelveHours),
+            "1d" => Some(Self::OneDay),
+            "3d" => Some(Self::ThreeDays),
+            "1w" => Some(Self::OneWeek),
+            "1M" => Some(Self::OneMonth),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::OneSecond => "1s",
+            Self::OneMinute => "1m",
+            Self::ThreeMinutes => "3m",
+            Self::FiveMinutes => "5m",
+            Self::FifteenMinutes => "15m",
+            Self::ThirtyMinutes => "30m",
+            Self::OneHour => "1h",
+            Self::TwoHours => "2h",
+            Self::FourHours => "4h",
+            Self::SixHours => "6h",
+            Self::EightHours => "8h",
+            Self::TwelveHours => "12h",
+            Self::OneDay => "1d",
+            Self::ThreeDays => "3d",
+            Self::OneWeek => "1w",
+            Self::OneMonth => "1M",
+        }
+    }
+}
+
+impl std::fmt::Display for KlineInterval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

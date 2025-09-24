@@ -645,8 +645,10 @@ pub fn parse_klines_from_json(json: Value) -> Result<Vec<Kline>, ExchangeError> 
                             low: low,
                             close: close,
                             volume: volume,
-                            quote_volume: quote_volume,
-                            trades_count,
+                            quote_asset_volume: quote_volume,
+                            number_of_trades: trades_count as i64,
+                            taker_buy_base_asset_volume: Decimal::ZERO,
+                            taker_buy_quote_asset_volume: Decimal::ZERO,
                         });
                     }
                 }

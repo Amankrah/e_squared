@@ -47,6 +47,9 @@ pub trait Strategy {
 /// Registry for available strategies
 pub struct StrategyRegistry;
 
+/// Factory for creating strategy instances
+pub struct StrategyFactory;
+
 impl StrategyRegistry {
     /// Get a list of all available strategies
     pub fn list_strategies() -> Vec<&'static str> {
@@ -79,4 +82,30 @@ pub struct StrategyInfo {
     pub name: &'static str,
     pub description: &'static str,
     pub parameters_schema: Value,
+}
+
+impl StrategyFactory {
+    /// Create a strategy instance with parameters
+    pub fn create(name: &str, parameters: Value) -> Result<Box<dyn Strategy>, AppError> {
+        let mut strategy = match name.to_lowercase().as_str() {
+            "dca" => Box::new(dca::DCAStrategy::new()) as Box<dyn Strategy>,
+            "sma_crossover" => {
+                // Placeholder for SMA crossover strategy
+                return Err(AppError::BadRequest("SMA crossover strategy not yet implemented".to_string()));
+            }
+            "rsi" => {
+                // Placeholder for RSI strategy
+                return Err(AppError::BadRequest("RSI strategy not yet implemented".to_string()));
+            }
+            "macd" => {
+                // Placeholder for MACD strategy
+                return Err(AppError::BadRequest("MACD strategy not yet implemented".to_string()));
+            }
+            _ => return Err(AppError::BadRequest(format!("Unknown strategy: {}", name))),
+        };
+
+        // Initialize with parameters
+        strategy.initialize(&parameters)?;
+        Ok(strategy)
+    }
 }

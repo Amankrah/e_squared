@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS exchange_connections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    exchange_name TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    encrypted_api_key TEXT NOT NULL,
+    encrypted_api_secret TEXT NOT NULL,
+    encrypted_passphrase TEXT,
+    api_key_nonce TEXT NOT NULL,
+    api_secret_nonce TEXT NOT NULL,
+    passphrase_nonce TEXT,
+    api_key_salt TEXT NOT NULL,
+    api_secret_salt TEXT NOT NULL,
+    passphrase_salt TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    last_sync TEXT,
+    connection_status TEXT NOT NULL DEFAULT 'pending',
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);

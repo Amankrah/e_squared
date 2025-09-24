@@ -104,11 +104,13 @@ pub async fn run_backtest(
         initial_balance: body.initial_balance,
         strategy_name: body.strategy_name.clone(),
         strategy_parameters: body.strategy_parameters.clone(),
+        stop_loss_percentage: None,
+        take_profit_percentage: None,
     };
 
     // Run backtest
     let engine = BacktestEngine::new();
-    let result = engine.run_backtest(config.clone(), strategy).await?;
+    let result = engine.run_backtest(config.clone()).await?;
 
     let response = BacktestResponse {
         backtest_id: Uuid::new_v4().to_string(),

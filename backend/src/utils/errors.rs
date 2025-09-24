@@ -25,6 +25,9 @@ pub enum AppError {
     DecryptionError(String),
     Forbidden(String),
     ExternalServiceError(String),
+    RateLimitError(String),
+    Banned(String),
+    ParseError(String),
 }
 
 impl fmt::Display for AppError {
@@ -50,6 +53,9 @@ impl fmt::Display for AppError {
             AppError::DecryptionError(msg) => write!(f, "Decryption error: {}", msg),
             AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
             AppError::ExternalServiceError(msg) => write!(f, "External service error: {}", msg),
+            AppError::RateLimitError(msg) => write!(f, "Rate limit error: {}", msg),
+            AppError::Banned(msg) => write!(f, "Banned: {}", msg),
+            AppError::ParseError(msg) => write!(f, "Parse error: {}", msg),
         }
     }
 }
@@ -178,6 +184,24 @@ impl ResponseError for AppError {
             AppError::ExternalServiceError(msg) => {
                 HttpResponse::BadGateway().json(serde_json::json!({
                     "error": "External service error",
+                    "message": msg
+                }))
+            }
+            AppError::RateLimitError(msg) => {
+                HttpResponse::TooManyRequests().json(serde_json::json!({
+                    "error": "Rate limit exceeded",
+                    "message": msg
+                }))
+            }
+            AppError::Banned(msg) => {
+                HttpResponse::Forbidden().json(serde_json::json!({
+                    "error": "Banned",
+                    "message": msg
+                }))
+            }
+            AppError::ParseError(msg) => {
+                HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": "Parse error",
                     "message": msg
                 }))
             }

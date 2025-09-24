@@ -12,6 +12,8 @@ pub struct BacktestConfig {
     pub initial_balance: Decimal,
     pub strategy_name: String,
     pub strategy_parameters: serde_json::Value,
+    pub stop_loss_percentage: Option<Decimal>,
+    pub take_profit_percentage: Option<Decimal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +21,7 @@ pub struct BacktestResult {
     pub config: BacktestConfig,
     pub trades: Vec<BacktestTrade>,
     pub metrics: BacktestMetrics,
-    pub historical_data: Vec<Kline>,
+    pub performance_chart: Vec<PerformancePoint>,
     pub execution_time_ms: u64,
 }
 
@@ -33,6 +35,8 @@ pub struct BacktestTrade {
     pub portfolio_value: Decimal,
     pub balance_remaining: Decimal,
     pub reason: String,
+    pub pnl: Option<Decimal>,
+    pub pnl_percentage: Option<Decimal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,4 +117,27 @@ impl Portfolio {
             false
         }
     }
+}
+
+/// Performance point for charting
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformancePoint {
+    pub timestamp: DateTime<Utc>,
+    pub portfolio_value: Decimal,
+    pub asset_price: Decimal,
+    pub trade_marker: Option<TradeType>,
+}
+
+/// Backtesting request from API
+#[derive(Debug, Clone, Deserialize)]
+pub struct BacktestRequest {
+    pub symbol: String,
+    pub interval: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub initial_balance: Decimal,
+    pub strategy_name: String,
+    pub strategy_parameters: Option<serde_json::Value>,
+    pub stop_loss_percentage: Option<Decimal>,
+    pub take_profit_percentage: Option<Decimal>,
 }

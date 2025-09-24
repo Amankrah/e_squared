@@ -130,9 +130,6 @@ pub async fn run_template_backtest(
         return Err(AppError::BadRequest("Initial balance must be positive".to_string()));
     }
 
-    // Create strategy instance
-    let strategy = StrategyRegistry::create_strategy(strategy_name)?;
-
     // Create backtest config
     let config = BacktestConfig {
         symbol: body.symbol.clone(),
@@ -142,11 +139,13 @@ pub async fn run_template_backtest(
         initial_balance: body.initial_balance,
         strategy_name: strategy_name.to_string(),
         strategy_parameters: body.template_parameters.clone(),
+        stop_loss_percentage: None,
+        take_profit_percentage: None,
     };
 
     // Run backtest
     let engine = BacktestEngine::new();
-    let result = engine.run_backtest(config, strategy).await?;
+    let result = engine.run_backtest(config).await?;
 
     let response = TemplateBacktestResponse {
         template_id: body.template_id.clone(),

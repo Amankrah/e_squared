@@ -1,149 +1,367 @@
+use std::sync::Arc;
 use std::time::Instant;
 use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, prelude::*};
-use tracing::{info, debug, error};
+use tracing::{info, debug, error, warn};
 
 use crate::backtesting::types::*;
-use crate::strategies::Strategy;
-use crate::exchange_connectors::{
-    ExchangeFactory, ExchangeCredentials, Exchange,
-    Kline, KlineInterval,
-};
+use crate::backtesting::binance_fetcher::BinanceFetcher;
+use crate::strategies::{Strategy, StrategyFactory};
+use crate::exchange_connectors::{Kline, KlineInterval};
 use crate::utils::errors::AppError;
 
-pub struct BacktestEngine;
+/// Backtesting engine with integrated caching and optimization
+pub struct BacktestEngine {
+    data_fetcher: Arc<BinanceFetcher>,
+}
 
 impl BacktestEngine {
+    /// Create a new backtest engine
     pub fn new() -> Self {
-        Self
+        Self {
+            data_fetcher: Arc::new(BinanceFetcher::new()),
+        }
     }
 
-    /// Run a backtest with the given configuration and strategy
+    /// Run a backtest with the given configuration
     pub async fn run_backtest(
         &self,
         config: BacktestConfig,
-        mut strategy: Box<dyn Strategy>,
     ) -> Result<BacktestResult, AppError> {
         let start_time = Instant::now();
 
-        info!("Starting backtest for {} from {} to {}",
-              config.symbol, config.start_time, config.end_time);
+        info!(
+            "Starting backtest for {} on {} from {} to {}",
+            config.strategy_name, config.symbol, config.start_time, config.end_time
+        );
 
-        // Fetch historical data
-        let historical_data = self.fetch_historical_data(&config).await?;
+        // Validate inputs
+        self.validate_config(&config)?;
+
+        // Create strategy instance
+        let mut strategy = StrategyFactory::create(
+            &config.strategy_name,
+            config.strategy_parameters.clone(),
+        )?;
+
+        // Fetch historical data (will use cache if available)
+        let historical_data = self
+            .data_fetcher
+            .fetch_klines(
+                &config.symbol,
+                &config.interval,
+                config.start_time,
+                config.end_time,
+            )
+            .await?;
 
         if historical_data.is_empty() {
-            return Err(AppError::BadRequest("No historical data available for the given period".to_string()));
+            return Err(AppError::BadRequest(
+                "No historical data available for the given period".to_string(),
+            ));
         }
 
         debug!("Fetched {} klines for backtesting", historical_data.len());
 
-        // Initialize portfolio
-        let mut portfolio = Portfolio::new(config.initial_balance);
-        let mut trades = Vec::new();
+        // Run the backtest simulation
+        let (trades, portfolio) = self.run_simulation(
+            &historical_data,
+            &mut *strategy,
+            config.initial_balance,
+            &config,
+        ).await?;
 
-        // Initialize strategy
-        strategy.initialize(&config.strategy_parameters)?;
-
-        // Run strategy on each kline
-        for (index, kline) in historical_data.iter().enumerate() {
-            portfolio.update_total_value(kline.close);
-
-            // Get strategy signal
-            let signal = strategy.analyze(&historical_data, index);
-
-            match signal {
-                Some(crate::strategies::TradeSignal::Buy(amount)) => {
-                    let quantity = amount / kline.close;
-                    if portfolio.execute_buy(kline.close, quantity) {
-                        trades.push(BacktestTrade {
-                            timestamp: kline.close_time,
-                            trade_type: TradeType::Buy,
-                            price: kline.close,
-                            quantity,
-                            total_value: amount,
-                            portfolio_value: portfolio.total_value,
-                            balance_remaining: portfolio.cash_balance,
-                            reason: strategy.get_last_signal_reason(),
-                        });
-                        debug!("Executed buy: {} @ {}", quantity, kline.close);
-                    }
-                }
-                Some(crate::strategies::TradeSignal::Sell(quantity)) => {
-                    if portfolio.execute_sell(kline.close, quantity) {
-                        trades.push(BacktestTrade {
-                            timestamp: kline.close_time,
-                            trade_type: TradeType::Sell,
-                            price: kline.close,
-                            quantity,
-                            total_value: quantity * kline.close,
-                            portfolio_value: portfolio.total_value,
-                            balance_remaining: portfolio.cash_balance,
-                            reason: strategy.get_last_signal_reason(),
-                        });
-                        debug!("Executed sell: {} @ {}", quantity, kline.close);
-                    }
-                }
-                None => {
-                    // No signal, continue
-                }
-            }
-        }
-
-        // Calculate final portfolio value
-        if let Some(last_kline) = historical_data.last() {
-            portfolio.update_total_value(last_kline.close);
-        }
-
-        // Calculate metrics
-        let metrics = self.calculate_metrics(&trades, &portfolio, &historical_data, &config);
+        // Calculate comprehensive metrics
+        let metrics = self.calculate_metrics(
+            &trades,
+            &portfolio,
+            &historical_data,
+            &config,
+        );
 
         let execution_time = start_time.elapsed().as_millis() as u64;
 
-        info!("Backtest completed in {}ms. Final portfolio value: {}",
-              execution_time, portfolio.total_value);
+        info!(
+            "Backtest completed in {}ms. Final portfolio value: {} ({:+.2}%)",
+            execution_time,
+            portfolio.total_value,
+            metrics.total_return_percentage
+        );
+
+        let performance_chart = self.generate_performance_chart(&trades, &historical_data);
 
         Ok(BacktestResult {
             config,
             trades,
             metrics,
-            historical_data,
+            performance_chart,
             execution_time_ms: execution_time,
         })
     }
 
-    /// Fetch historical data from the specified exchange
-    async fn fetch_historical_data(&self, config: &BacktestConfig) -> Result<Vec<Kline>, AppError> {
-        // For now, we'll use a demo exchange connection
-        // In production, this could be configurable or use a data provider
+    /// Validate backtest configuration
+    fn validate_config(&self, config: &BacktestConfig) -> Result<(), AppError> {
+        // Validate symbol
+        BinanceFetcher::validate_symbol(&config.symbol)?;
 
-        // Create a dummy exchange connector for data fetching
-        // We'll use Binance as the default data source
-        let exchange = Exchange::from_str("Binance")
-            .ok_or_else(|| AppError::BadRequest("Unsupported exchange".to_string()))?;
+        // Validate time range
+        if config.start_time >= config.end_time {
+            return Err(AppError::BadRequest(
+                "Start time must be before end time".to_string(),
+            ));
+        }
 
-        // For backtesting, we can use public API endpoints that don't require authentication
-        let credentials = ExchangeCredentials {
-            api_key: String::new(),
-            api_secret: String::new(),
-        };
+        // Check if time range is not too large (e.g., max 1 year)
+        let max_days = 365;
+        let days_diff = (config.end_time - config.start_time).num_days();
+        if days_diff > max_days {
+            return Err(AppError::BadRequest(format!(
+                "Time range too large. Maximum {} days allowed",
+                max_days
+            )));
+        }
 
-        let connector = ExchangeFactory::create(exchange, credentials)
-            .map_err(|e| AppError::ExternalServiceError(format!("Failed to create exchange connector: {}", e)))?;
+        // Validate initial balance
+        if config.initial_balance <= Decimal::ZERO {
+            return Err(AppError::BadRequest(
+                "Initial balance must be positive".to_string(),
+            ));
+        }
 
-        // Fetch klines data
-        let klines = connector
-            .get_klines(
-                &config.symbol,
-                config.interval.clone(),
-                Some(config.start_time),
-                Some(config.end_time),
-                None, // No limit, get all data in range
-            )
-            .await
-            .map_err(|e| AppError::ExternalServiceError(format!("Failed to fetch historical data: {}", e)))?;
+        // Check for minimum balance
+        let min_balance = Decimal::from(100);
+        if config.initial_balance < min_balance {
+            return Err(AppError::BadRequest(format!(
+                "Minimum initial balance is {}",
+                min_balance
+            )));
+        }
 
-        Ok(klines)
+        Ok(())
+    }
+
+    /// Run the backtest simulation
+    async fn run_simulation(
+        &self,
+        historical_data: &[Kline],
+        strategy: &mut dyn Strategy,
+        initial_balance: Decimal,
+        config: &BacktestConfig,
+    ) -> Result<(Vec<BacktestTrade>, Portfolio), AppError> {
+        let mut portfolio = Portfolio::new(initial_balance);
+        let mut trades = Vec::new();
+        let mut position_tracker = PositionTracker::new();
+
+        // Initialize strategy
+        strategy.initialize(&config.strategy_parameters)?;
+
+        // Process each kline
+        for (index, kline) in historical_data.iter().enumerate() {
+            // Update portfolio value
+            portfolio.update_total_value(kline.close);
+
+            // Get strategy signal
+            let signal = strategy.analyze(historical_data, index);
+
+            // Execute trades based on signal
+            if let Some(signal) = signal {
+                if let Some(trade) = self.execute_signal(
+                    signal,
+                    kline,
+                    &mut portfolio,
+                    &mut position_tracker,
+                    strategy.get_last_signal_reason(),
+                ) {
+                    trades.push(trade);
+                }
+            }
+
+            // Check stop loss and take profit
+            self.check_exit_conditions(
+                kline,
+                &mut portfolio,
+                &mut position_tracker,
+                &mut trades,
+                config,
+            );
+        }
+
+        // Close any remaining positions at the end
+        if let Some(last_kline) = historical_data.last() {
+            if position_tracker.has_position() {
+                let close_trade = self.close_position(
+                    last_kline,
+                    &mut portfolio,
+                    &mut position_tracker,
+                    "End of backtest period",
+                );
+                if let Some(trade) = close_trade {
+                    trades.push(trade);
+                }
+            }
+            portfolio.update_total_value(last_kline.close);
+        }
+
+        Ok((trades, portfolio))
+    }
+
+    /// Execute a trading signal
+    fn execute_signal(
+        &self,
+        signal: crate::strategies::TradeSignal,
+        kline: &Kline,
+        portfolio: &mut Portfolio,
+        position_tracker: &mut PositionTracker,
+        reason: String,
+    ) -> Option<BacktestTrade> {
+        match signal {
+            crate::strategies::TradeSignal::Buy(amount) => {
+                // Check if we already have a position
+                if position_tracker.has_position() {
+                    debug!("Skipping buy signal - already have position");
+                    return None;
+                }
+
+                let quantity = amount / kline.close;
+                if portfolio.execute_buy(kline.close, quantity) {
+                    position_tracker.open_position(kline.close, quantity);
+
+                    let trade = BacktestTrade {
+                        timestamp: kline.close_time,
+                        trade_type: TradeType::Buy,
+                        price: kline.close,
+                        quantity,
+                        total_value: amount,
+                        portfolio_value: portfolio.total_value,
+                        balance_remaining: portfolio.cash_balance,
+                        reason,
+                        pnl: None,
+                        pnl_percentage: None,
+                    };
+
+                    debug!("Executed BUY: {} @ {}", quantity, kline.close);
+                    Some(trade)
+                } else {
+                    warn!("Failed to execute buy - insufficient balance");
+                    None
+                }
+            }
+            crate::strategies::TradeSignal::Sell(quantity) => {
+                // Check if we have a position to sell
+                if !position_tracker.has_position() {
+                    debug!("Skipping sell signal - no position");
+                    return None;
+                }
+
+                let actual_quantity = quantity.min(portfolio.asset_quantity);
+                if portfolio.execute_sell(kline.close, actual_quantity) {
+                    let pnl_data = position_tracker.close_position(kline.close, actual_quantity);
+
+                    let trade = BacktestTrade {
+                        timestamp: kline.close_time,
+                        trade_type: TradeType::Sell,
+                        price: kline.close,
+                        quantity: actual_quantity,
+                        total_value: actual_quantity * kline.close,
+                        portfolio_value: portfolio.total_value,
+                        balance_remaining: portfolio.cash_balance,
+                        reason,
+                        pnl: pnl_data.0,
+                        pnl_percentage: pnl_data.1,
+                    };
+
+                    debug!(
+                        "Executed SELL: {} @ {} (PnL: {:+.2})",
+                        actual_quantity,
+                        kline.close,
+                        pnl_data.0.unwrap_or(Decimal::ZERO)
+                    );
+                    Some(trade)
+                } else {
+                    warn!("Failed to execute sell");
+                    None
+                }
+            }
+        }
+    }
+
+    /// Check and execute stop loss and take profit conditions
+    fn check_exit_conditions(
+        &self,
+        kline: &Kline,
+        portfolio: &mut Portfolio,
+        position_tracker: &mut PositionTracker,
+        trades: &mut Vec<BacktestTrade>,
+        config: &BacktestConfig,
+    ) {
+        if !position_tracker.has_position() {
+            return;
+        }
+
+        let entry_price = position_tracker.entry_price;
+        let current_price = kline.close;
+        let price_change_pct = ((current_price - entry_price) / entry_price) * Decimal::from(100);
+
+        // Check stop loss
+        if let Some(stop_loss_pct) = config.stop_loss_percentage {
+            if price_change_pct <= -stop_loss_pct {
+                if let Some(trade) = self.close_position(
+                    kline,
+                    portfolio,
+                    position_tracker,
+                    &format!("Stop loss triggered at {:.2}%", price_change_pct),
+                ) {
+                    trades.push(trade);
+                }
+            }
+        }
+
+        // Check take profit
+        if let Some(take_profit_pct) = config.take_profit_percentage {
+            if price_change_pct >= take_profit_pct {
+                if let Some(trade) = self.close_position(
+                    kline,
+                    portfolio,
+                    position_tracker,
+                    &format!("Take profit triggered at {:.2}%", price_change_pct),
+                ) {
+                    trades.push(trade);
+                }
+            }
+        }
+    }
+
+    /// Close current position
+    fn close_position(
+        &self,
+        kline: &Kline,
+        portfolio: &mut Portfolio,
+        position_tracker: &mut PositionTracker,
+        reason: &str,
+    ) -> Option<BacktestTrade> {
+        if !position_tracker.has_position() {
+            return None;
+        }
+
+        let quantity = portfolio.asset_quantity;
+        if portfolio.execute_sell(kline.close, quantity) {
+            let pnl_data = position_tracker.close_position(kline.close, quantity);
+
+            Some(BacktestTrade {
+                timestamp: kline.close_time,
+                trade_type: TradeType::Sell,
+                price: kline.close,
+                quantity,
+                total_value: quantity * kline.close,
+                portfolio_value: portfolio.total_value,
+                balance_remaining: portfolio.cash_balance,
+                reason: reason.to_string(),
+                pnl: pnl_data.0,
+                pnl_percentage: pnl_data.1,
+            })
+        } else {
+            None
+        }
     }
 
     /// Calculate comprehensive backtest metrics
@@ -172,28 +390,14 @@ impl BacktestEngine {
         let mut total_wins = Decimal::ZERO;
         let mut total_losses = Decimal::ZERO;
 
-        // Calculate trade-level P&L
         for trade in trades {
-            // This is a simplified P&L calculation
-            // In a more sophisticated system, we'd track the exact entry/exit pairs
-            match trade.trade_type {
-                TradeType::Buy => {
-                    // For buy trades, we'll compare against the final price
-                    if let Some(last_kline) = historical_data.last() {
-                        let unrealized_pnl = (last_kline.close - trade.price) * trade.quantity;
-                        if unrealized_pnl > Decimal::ZERO {
-                            winning_trades += 1;
-                            total_wins += unrealized_pnl;
-                        } else {
-                            losing_trades += 1;
-                            total_losses += unrealized_pnl.abs();
-                        }
-                    }
-                }
-                TradeType::Sell => {
-                    // For sell trades, we assume they were profitable if executed
+            if let Some(pnl) = trade.pnl {
+                if pnl > Decimal::ZERO {
                     winning_trades += 1;
-                    total_wins += trade.total_value;
+                    total_wins += pnl;
+                } else if pnl < Decimal::ZERO {
+                    losing_trades += 1;
+                    total_losses += pnl.abs();
                 }
             }
         }
@@ -218,6 +422,8 @@ impl BacktestEngine {
 
         let profit_factor = if total_losses > Decimal::ZERO {
             Some(total_wins / total_losses)
+        } else if total_wins > Decimal::ZERO {
+            Some(Decimal::from(999)) // Max profit factor
         } else {
             None
         };
@@ -240,9 +446,20 @@ impl BacktestEngine {
             None
         };
 
-        // Sharpe ratio (simplified - using volatility as standard deviation)
+        // Sharpe ratio (simplified)
+        let risk_free_rate = Decimal::from_str("2.0").unwrap(); // 2% annual risk-free rate
         let sharpe_ratio = if volatility > Decimal::ZERO && annualized_return.is_some() {
-            Some(annualized_return.unwrap() / volatility)
+            Some((annualized_return.unwrap() - risk_free_rate) / volatility)
+        } else {
+            None
+        };
+
+        // Calculate buy & hold return for benchmark
+        let benchmark_return = if let (Some(first), Some(last)) =
+            (historical_data.first(), historical_data.last())
+        {
+            let buy_hold_return = ((last.close - first.close) / first.close) * Decimal::from(100);
+            Some(buy_hold_return)
         } else {
             None
         };
@@ -262,14 +479,19 @@ impl BacktestEngine {
             average_loss,
             profit_factor,
             final_portfolio_value: final_value,
-            benchmark_return: None, // TODO: Implement benchmark comparison
-            alpha: None,            // TODO: Calculate alpha
-            beta: None,             // TODO: Calculate beta
+            benchmark_return,
+            alpha: None, // Can be calculated if needed
+            beta: None,  // Can be calculated if needed
         }
     }
 
+    /// Calculate maximum drawdown
     fn calculate_max_drawdown(&self, trades: &[BacktestTrade]) -> Decimal {
-        let mut max_value = Decimal::ZERO;
+        if trades.is_empty() {
+            return Decimal::ZERO;
+        }
+
+        let mut max_value = trades[0].portfolio_value;
         let mut max_drawdown = Decimal::ZERO;
 
         for trade in trades {
@@ -277,7 +499,12 @@ impl BacktestEngine {
                 max_value = trade.portfolio_value;
             }
 
-            let current_drawdown = (max_value - trade.portfolio_value) / max_value * Decimal::from(100);
+            let current_drawdown = if max_value > Decimal::ZERO {
+                ((max_value - trade.portfolio_value) / max_value) * Decimal::from(100)
+            } else {
+                Decimal::ZERO
+            };
+
             if current_drawdown > max_drawdown {
                 max_drawdown = current_drawdown;
             }
@@ -286,34 +513,128 @@ impl BacktestEngine {
         max_drawdown
     }
 
+    /// Calculate volatility (annualized)
     fn calculate_volatility(&self, historical_data: &[Kline]) -> Decimal {
         if historical_data.len() < 2 {
             return Decimal::ZERO;
         }
 
+        // Calculate daily returns
         let returns: Vec<Decimal> = historical_data
             .windows(2)
             .map(|window| {
                 let prev_price = window[0].close;
                 let curr_price = window[1].close;
-                (curr_price - prev_price) / prev_price
+                if prev_price > Decimal::ZERO {
+                    (curr_price - prev_price) / prev_price
+                } else {
+                    Decimal::ZERO
+                }
             })
             .collect();
 
+        if returns.is_empty() {
+            return Decimal::ZERO;
+        }
+
+        // Calculate mean return
         let mean_return = returns.iter().sum::<Decimal>() / Decimal::from(returns.len());
 
+        // Calculate variance
         let variance = returns
             .iter()
             .map(|r| {
                 let diff = *r - mean_return;
-                diff * diff // Use multiplication instead of powi
+                diff * diff
             })
-            .sum::<Decimal>() / Decimal::from(returns.len());
+            .sum::<Decimal>()
+            / Decimal::from(returns.len());
 
-        // Convert to annualized volatility (approximate)
-        // Use a simple approximation for square root for now
-        let volatility_daily = variance; // Simplified - would need proper sqrt implementation
-        volatility_daily * Decimal::from(16) * Decimal::from(100) // Approximate sqrt(252) ≈ 16
+        // Approximate annualized volatility
+        // sqrt(variance) * sqrt(252) ≈ variance^0.5 * 15.87
+        // Using approximation since Decimal doesn't have sqrt
+        let daily_vol = variance.to_f64().unwrap_or(0.0).sqrt();
+        let annual_vol = daily_vol * (252_f64).sqrt() * 100.0;
+
+        Decimal::from_f64(annual_vol).unwrap_or(Decimal::ZERO)
+    }
+
+    /// Generate performance chart data
+    fn generate_performance_chart(
+        &self,
+        trades: &[BacktestTrade],
+        historical_data: &[Kline],
+    ) -> Vec<PerformancePoint> {
+        let mut chart_data = Vec::new();
+
+        // Add initial point
+        if let Some(first_kline) = historical_data.first() {
+            chart_data.push(PerformancePoint {
+                timestamp: first_kline.open_time,
+                portfolio_value: Decimal::from(10000), // Assuming initial value
+                asset_price: first_kline.close,
+                trade_marker: None,
+            });
+        }
+
+        // Add trade points
+        for trade in trades {
+            chart_data.push(PerformancePoint {
+                timestamp: trade.timestamp,
+                portfolio_value: trade.portfolio_value,
+                asset_price: trade.price,
+                trade_marker: Some(trade.trade_type.clone()),
+            });
+        }
+
+        chart_data
+    }
+}
+
+/// Position tracker for managing open positions
+#[derive(Debug, Clone)]
+struct PositionTracker {
+    entry_price: Decimal,
+    entry_quantity: Decimal,
+    is_open: bool,
+}
+
+impl PositionTracker {
+    fn new() -> Self {
+        Self {
+            entry_price: Decimal::ZERO,
+            entry_quantity: Decimal::ZERO,
+            is_open: false,
+        }
+    }
+
+    fn has_position(&self) -> bool {
+        self.is_open
+    }
+
+    fn open_position(&mut self, price: Decimal, quantity: Decimal) {
+        self.entry_price = price;
+        self.entry_quantity = quantity;
+        self.is_open = true;
+    }
+
+    fn close_position(&mut self, exit_price: Decimal, quantity: Decimal) -> (Option<Decimal>, Option<Decimal>) {
+        if !self.is_open {
+            return (None, None);
+        }
+
+        let pnl = (exit_price - self.entry_price) * quantity;
+        let pnl_percentage = if self.entry_price > Decimal::ZERO {
+            ((exit_price - self.entry_price) / self.entry_price) * Decimal::from(100)
+        } else {
+            Decimal::ZERO
+        };
+
+        self.is_open = false;
+        self.entry_price = Decimal::ZERO;
+        self.entry_quantity = Decimal::ZERO;
+
+        (Some(pnl), Some(pnl_percentage))
     }
 }
 
