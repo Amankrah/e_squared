@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use rust_decimal::{Decimal, prelude::FromPrimitive};
+use rust_decimal::Decimal;
 
 /// DCA strategy variants
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

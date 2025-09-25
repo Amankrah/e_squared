@@ -1,14 +1,14 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 
 use crate::strategies::core::{
     Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal,
-    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, IndicatorValue, QuantityType,
+    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, QuantityType,
 };
-use crate::strategies::indicators::{self, IndicatorService, IndicatorContext};
+use crate::strategies::indicators::{self};
 use crate::utils::errors::AppError;
 
 use super::config::{MACDStrategyConfig, PositionSizingMethod};

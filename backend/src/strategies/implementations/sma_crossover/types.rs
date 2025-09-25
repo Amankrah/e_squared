@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
 
 /// Types of SMA crossover signals
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

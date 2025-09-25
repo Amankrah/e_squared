@@ -14,7 +14,6 @@ use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, middleware::Logger, cookie::Key};
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use anyhow::{Result, Context};
-use dotenv::dotenv;
 use std::sync::Arc;
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -70,7 +69,7 @@ impl AppServices {
 
     /// Start background services
     async fn start_background_services(&self) {
-        info!("Starting DCA execution engine...");
+        info!("Starting strategy execution engines...");
         let engine_clone = self.execution_engine.clone();
         tokio::spawn(async move {
             engine_clone.start_engine().await;
@@ -184,14 +183,14 @@ fn create_server(
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load environment variables
-    dotenv().ok();
+    // Load environment variables from .env in current directory
+    dotenv::dotenv().ok();
     
     // Initialize logging
     init_logging()
         .context("Failed to initialize logging system")?;
     
-    info!("🚀 Starting E² Trading Backend");
+    info!("🚀 Starting E² Algorithmic Trading Platform");
     
     // Load and validate configuration
     let config = Config::from_env()
@@ -221,7 +220,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .context("Failed to create HTTP server")?;
     
     info!("🌐 Server starting on {}:{}", config.server_host, config.server_port);
-    info!("📚 API Documentation available at http://{}:{}/health", config.server_host, config.server_port);
+    info!("📚 E² Trading Platform API - Visit http://{}:{}/api/v1/docs for documentation", config.server_host, config.server_port);
+    info!("🔧 Available Strategies: DCA, SMA Crossover, Grid Trading, RSI, MACD");
+    info!("📊 Backtesting Engine: Active | 🤖 Execution Engine: Active");
     
     // Run the server
     server.await

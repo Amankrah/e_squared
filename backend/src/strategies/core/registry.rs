@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 use super::traits::{Strategy, StrategyFactory, StrategyMetadata, StrategyCategory, RiskLevel, StrategyMode};
 use crate::utils::errors::AppError;

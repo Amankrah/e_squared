@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::exchange_connectors::Kline;
 use crate::utils::errors::AppError;
-use super::signals::{StrategySignal, StrategySignalType, QuantityType, IndicatorValue};
+use super::signals::{StrategySignal, StrategySignalType};
 
 /// Strategy execution mode
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

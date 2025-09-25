@@ -7,9 +7,6 @@ pub mod integration;
 pub mod examples;
 
 // Re-export main components for easy access
-pub use core::*;
-pub use service::{IndicatorService, IndicatorServiceConfig};
-pub use integration::{IndicatorContext, utils};
 
 // Legacy functions for backward compatibility
 use rust_decimal::{Decimal, prelude::*};

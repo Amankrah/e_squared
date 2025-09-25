@@ -4,4 +4,3 @@ mod types;
 
 pub use strategy::*;
 pub use config::*;
-pub use types::*;

@@ -1,5 +1,5 @@
-use rust_decimal::{Decimal, prelude::FromPrimitive};
-use super::{DCAConfig, DCAFrequency, DCAType, RSIConfig, VolatilityConfig, DipBuyingLevel, DynamicFactors, SentimentConfig, DCAFilters};
+use rust_decimal::Decimal;
+use super::{DCAConfig, DCAFrequency, RSIConfig, VolatilityConfig, DipBuyingLevel, DynamicFactors, DCAFilters};
 
 /// Preset configurations for common DCA strategies
 pub struct DCAPresets;

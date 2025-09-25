@@ -7,7 +7,7 @@ use chrono::Utc;
 
 use crate::backtesting::types::*;
 use crate::backtesting::binance_fetcher::BinanceFetcher;
-use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData, Position};
+use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData};
 use crate::exchange_connectors::{Kline};
 use crate::utils::errors::AppError;
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use rust_decimal::{Decimal, prelude::FromPrimitive};
+use rust_decimal::Decimal;
 
 use super::types::*;
 

@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use rust_decimal::{Decimal, prelude::*};
+use rust_decimal::Decimal;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 use crate::exchange_connectors::Kline;

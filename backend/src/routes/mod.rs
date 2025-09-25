@@ -1,11 +1,13 @@
 pub mod backtesting;
 
-use actix_web::web;
+use actix_web::{web, HttpResponse};
 use std::env;
+use serde_json::json;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
     dca_strategy_management, rsi_strategy_management, macd_strategy_management,
+    sma_crossover_strategy_management, grid_trading_strategy_management,
     AuthService
 };
 use crate::middleware::AuthMiddleware;
@@ -22,6 +24,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_dca_routes)
             .configure(configure_rsi_routes)
             .configure(configure_macd_routes)
+            .configure(configure_sma_crossover_routes)
+            .configure(configure_grid_trading_routes)
             .configure(configure_strategy_template_routes)
             .configure(configure_exchange_connector_routes)
             .configure(configure_backtesting_routes)
@@ -30,9 +34,45 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     .route("/health", web::get().to(health_check));
 }
 
-/// Health check endpoint
-async fn health_check() -> &'static str {
-    "OK"
+/// Health check endpoint with API information
+async fn health_check() -> HttpResponse {
+    HttpResponse::Ok().json(json!({
+        "status": "healthy",
+        "platform": "E² Algorithmic Trading Platform",
+        "version": "1.0.0",
+        "description": "Professional algorithmic trading platform with backtesting and live execution",
+        "features": {
+            "strategies": [
+                "DCA (Dollar Cost Averaging)",
+                "SMA Crossover",
+                "Grid Trading",
+                "RSI (Relative Strength Index)",
+                "MACD (Moving Average Convergence Divergence)"
+            ],
+            "capabilities": [
+                "Real-time strategy execution",
+                "Historical backtesting",
+                "Multi-exchange support",
+                "Risk management",
+                "Performance analytics"
+            ],
+            "exchanges": [
+                "Binance",
+                "More exchanges coming soon"
+            ]
+        },
+        "api": {
+            "version": "v1",
+            "endpoints": {
+                "auth": "/api/auth",
+                "strategies": "/api/strategies",
+                "backtesting": "/api/backtesting",
+                "exchanges": "/api/exchanges",
+                "profiles": "/api/profile"
+            }
+        },
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    }))
 }
 
 /// Configure authentication routes
@@ -203,6 +243,41 @@ fn configure_exchange_connector_routes(cfg: &mut web::ServiceConfig) {
             .route("/margin", web::get().to(exchange_management::get_account_by_type))
             .route("/futures", web::get().to(exchange_management::get_account_by_type))
             .route("/test", web::get().to(exchange_management::test_connection_status))
+    );
+}
+
+/// Configure SMA Crossover strategy routes
+fn configure_sma_crossover_routes(cfg: &mut web::ServiceConfig) {
+    let jwt_secret = env::var("JWT_SECRET")
+        .expect("JWT_SECRET environment variable is required");
+
+    cfg.service(
+        web::scope("/sma-crossover")
+            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
+            .route("/strategies", web::post().to(sma_crossover_strategy_management::create_sma_crossover_strategy))
+            .route("/strategies", web::get().to(sma_crossover_strategy_management::get_user_sma_crossover_strategies))
+            .route("/strategies/{strategy_id}", web::get().to(sma_crossover_strategy_management::get_sma_crossover_strategy))
+            .route("/strategies/{strategy_id}", web::put().to(sma_crossover_strategy_management::update_sma_crossover_strategy))
+            .route("/strategies/{strategy_id}", web::delete().to(sma_crossover_strategy_management::delete_sma_crossover_strategy))
+            .route("/strategies/{strategy_id}/pause", web::post().to(sma_crossover_strategy_management::pause_sma_crossover_strategy))
+            .route("/strategies/{strategy_id}/resume", web::post().to(sma_crossover_strategy_management::resume_sma_crossover_strategy))
+    );
+}
+
+/// Configure Grid Trading strategy routes
+fn configure_grid_trading_routes(cfg: &mut web::ServiceConfig) {
+    let jwt_secret = env::var("JWT_SECRET")
+        .expect("JWT_SECRET environment variable is required");
+
+    cfg.service(
+        web::scope("/grid-trading")
+            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
+            .route("/strategies", web::post().to(grid_trading_strategy_management::create_grid_trading_strategy))
+            .route("/strategies", web::get().to(grid_trading_strategy_management::get_grid_trading_strategies))
+            .route("/strategies/{strategy_id}", web::get().to(grid_trading_strategy_management::get_grid_trading_strategy))
+            .route("/strategies/{strategy_id}", web::put().to(grid_trading_strategy_management::update_grid_trading_strategy))
+            .route("/strategies/{strategy_id}", web::delete().to(grid_trading_strategy_management::delete_grid_trading_strategy))
+            .route("/execution-stats", web::get().to(grid_trading_strategy_management::get_grid_trading_execution_stats))
     );
 }
 

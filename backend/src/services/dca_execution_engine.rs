@@ -102,7 +102,7 @@ impl DCAExecutionEngine {
 
     /// Start the high-performance execution engine
     pub async fn start_engine(&self) {
-        info!("Starting DCA Execution Engine with optimized performance");
+        info!("Starting E² Strategy Execution Engine with optimized performance");
 
         // Start multiple concurrent tasks for maximum performance
         let engine_clone = self.clone();

@@ -4,7 +4,6 @@ use crate::utils::errors::AppError;
 use crate::exchange_connectors::Kline;
 use super::service::{IndicatorService, IndicatorServiceConfig};
 use super::integration::{IndicatorContext, utils};
-use super::core::{IndicatorResult};
 
 /// Example: Enhanced DCA Strategy with Indicator Service
 /// This shows how strategies should use the new indicator system

@@ -74,22 +74,64 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
     migrate_2fa_columns(db).await?;
     // Migration for passphrase support
     migrate_passphrase_columns(db).await?;
+    // Migration for strategy config JSON support
+    migrate_strategy_config_columns(db).await?;
 
     info!("✓ Database migrations completed");
     Ok(())
 }
 
 async fn migrate_2fa_columns(db: &DatabaseConnection) -> Result<()> {
-    let migrations = vec![
-        "ALTER TABLE users ADD COLUMN totp_secret TEXT;",
-        "ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0;",
-        "UPDATE users SET totp_enabled = 0 WHERE totp_enabled IS NULL;",
-    ];
+    // Check if totp_secret column exists by trying to select it
+    match db.execute_unprepared("SELECT totp_secret FROM users LIMIT 1").await {
+        Ok(_) => {}, // Column exists
+        Err(_) => {
+            // Column doesn't exist, add it
+            if let Err(e) = db.execute_unprepared("ALTER TABLE users ADD COLUMN totp_secret TEXT").await {
+                warn!("Could not add totp_secret column: {}", e);
+            } else {
+                info!("✓ Added totp_secret column to users table");
+            }
+        }
+    }
 
-    for migration in migrations {
-        if let Err(e) = db.execute_unprepared(migration).await {
-            // Log but don't fail - these columns might already exist
-            warn!("Migration warning (expected if already applied): {}", e);
+    // Check if totp_enabled column exists by trying to select it
+    match db.execute_unprepared("SELECT totp_enabled FROM users LIMIT 1").await {
+        Ok(_) => {}, // Column exists
+        Err(_) => {
+            // Column doesn't exist, add it
+            if let Err(e) = db.execute_unprepared("ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT 0").await {
+                warn!("Could not add totp_enabled column: {}", e);
+            } else {
+                info!("✓ Added totp_enabled column to users table");
+            }
+        }
+    }
+
+    // Update any NULL values
+    let _ = db.execute_unprepared("UPDATE users SET totp_enabled = 0 WHERE totp_enabled IS NULL").await;
+
+    Ok(())
+}
+
+async fn migrate_strategy_config_columns(db: &DatabaseConnection) -> Result<()> {
+    // Try to select the column to see if it exists
+    let test_query = "SELECT config_json FROM dca_strategies LIMIT 1";
+
+    match db.execute_unprepared(test_query).await {
+        Ok(_) => {
+            // Column exists, no need to add it
+            info!("config_json column already exists in dca_strategies table");
+        },
+        Err(_) => {
+            // Column doesn't exist, add it
+            match db.execute_unprepared("ALTER TABLE dca_strategies ADD COLUMN config_json TEXT").await {
+                Ok(_) => info!("✓ Added config_json column to dca_strategies table"),
+                Err(e) => {
+                    error!("Failed to add config_json column: {}", e);
+                    return Err(e.into());
+                }
+            }
         }
     }
 
@@ -97,16 +139,26 @@ async fn migrate_2fa_columns(db: &DatabaseConnection) -> Result<()> {
 }
 
 async fn migrate_passphrase_columns(db: &DatabaseConnection) -> Result<()> {
-    let migrations = vec![
-        "ALTER TABLE exchange_connections ADD COLUMN encrypted_passphrase TEXT;",
-        "ALTER TABLE exchange_connections ADD COLUMN passphrase_nonce TEXT;",
-        "ALTER TABLE exchange_connections ADD COLUMN passphrase_salt TEXT;",
+    // Check columns by trying to select them
+    let columns_to_check = vec![
+        ("encrypted_passphrase", "ALTER TABLE exchange_connections ADD COLUMN encrypted_passphrase TEXT"),
+        ("passphrase_nonce", "ALTER TABLE exchange_connections ADD COLUMN passphrase_nonce TEXT"),
+        ("passphrase_salt", "ALTER TABLE exchange_connections ADD COLUMN passphrase_salt TEXT"),
     ];
 
-    for migration in migrations {
-        if let Err(e) = db.execute_unprepared(migration).await {
-            // Log but don't fail - these columns might already exist
-            warn!("Migration warning (expected if already applied): {}", e);
+    for (column_name, add_query) in columns_to_check {
+        let test_query = format!("SELECT {} FROM exchange_connections LIMIT 1", column_name);
+
+        match db.execute_unprepared(&test_query).await {
+            Ok(_) => {}, // Column exists
+            Err(_) => {
+                // Column doesn't exist, add it
+                if let Err(e) = db.execute_unprepared(add_query).await {
+                    warn!("Could not add {} column: {}", column_name, e);
+                } else {
+                    info!("✓ Added {} column to exchange_connections table", column_name);
+                }
+            }
         }
     }
 

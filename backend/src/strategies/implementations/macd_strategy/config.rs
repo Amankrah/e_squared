@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
 use validator::Validate;
-use super::types::{MACDSignalFilters, MACDSignal};
+use super::types::MACDSignalFilters;
 
 /// MACD Strategy Configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]

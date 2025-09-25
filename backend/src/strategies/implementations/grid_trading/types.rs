@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
 
 /// Trade side for grid operations
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

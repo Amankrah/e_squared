@@ -1,7 +1,6 @@
-use async_trait::async_trait;
 use serde_json::Value;
 
-use super::traits::{Strategy, StrategyFactory, StrategyMetadata, StrategyMode, StrategyContext};
+use super::traits::{Strategy, StrategyFactory, StrategyMetadata};
 use crate::utils::errors::AppError;
 
 /// Generic factory for creating strategies with initialization

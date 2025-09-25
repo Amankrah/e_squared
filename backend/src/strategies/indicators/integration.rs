@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use rust_decimal::Decimal;
 
 use crate::backtesting::engine::BacktestEngine;
