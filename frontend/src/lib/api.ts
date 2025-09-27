@@ -333,6 +333,287 @@ export interface DCAStrategiesResponse {
   active_strategies: number
 }
 
+// Base Strategy Types
+export interface BaseStrategy {
+  id: string
+  user_id: string
+  name: string
+  asset_symbol: string
+  status: string
+  total_invested: string
+  total_purchased: string
+  average_buy_price?: string
+  current_profit_loss?: string
+  profit_loss_percentage?: string
+  last_execution_at?: string
+  next_execution_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BaseExecution {
+  id: string
+  strategy_id: string
+  execution_type: string
+  trigger_reason: string
+  amount_usd: string
+  amount_asset?: string
+  price_at_execution?: string
+  order_status: string
+  execution_timestamp: string
+  error_message?: string
+}
+
+export type StrategyType = 'dca' | 'grid_trading' | 'sma_crossover' | 'rsi' | 'macd'
+
+// Grid Trading Strategy Types
+export interface GridTradingConfig {
+  grid_count: number
+  lower_price: string
+  upper_price: string
+  investment_amount: string
+  stop_loss_percentage?: string
+  take_profit_percentage?: string
+  rebalance_threshold?: string
+}
+
+export interface GridTradingStrategy extends BaseStrategy {
+  config: GridTradingConfig
+  recent_executions: GridTradingExecution[]
+}
+
+export interface GridTradingExecution extends BaseExecution {
+  grid_level?: number
+  buy_price?: string
+  sell_price?: string
+}
+
+export interface CreateGridTradingStrategyRequest {
+  name: string
+  asset_symbol: string
+  config: GridTradingConfig
+}
+
+export interface GridTradingStrategiesResponse {
+  strategies: GridTradingStrategy[]
+  total_allocation: string
+  total_invested: string
+  total_profit_loss: string
+  active_strategies: number
+}
+
+// SMA Crossover Strategy Types
+export interface SMACrossoverConfig {
+  short_period: number
+  long_period: number
+  investment_amount: string
+  stop_loss_percentage?: string
+  take_profit_percentage?: string
+  confirmation_period?: number
+}
+
+export interface SMACrossoverStrategy extends BaseStrategy {
+  config: SMACrossoverConfig
+  recent_executions: SMACrossoverExecution[]
+}
+
+export interface SMACrossoverExecution extends BaseExecution {
+  short_sma?: string
+  long_sma?: string
+  signal_type?: string
+}
+
+export interface CreateSMACrossoverStrategyRequest {
+  name: string
+  asset_symbol: string
+  config: SMACrossoverConfig
+}
+
+export interface SMACrossoverStrategiesResponse {
+  strategies: SMACrossoverStrategy[]
+  total_allocation: string
+  total_invested: string
+  total_profit_loss: string
+  active_strategies: number
+}
+
+// RSI Strategy Types
+export interface RSIConfig {
+  rsi_period: number
+  oversold_threshold: number
+  overbought_threshold: number
+  investment_amount: string
+  stop_loss_percentage?: string
+  take_profit_percentage?: string
+}
+
+export interface RSIStrategy extends BaseStrategy {
+  config: RSIConfig
+  recent_executions: RSIExecution[]
+}
+
+export interface RSIExecution extends BaseExecution {
+  rsi_value?: number
+  signal_strength?: string
+}
+
+export interface CreateRSIStrategyRequest {
+  name: string
+  asset_symbol: string
+  config: RSIConfig
+}
+
+export interface RSIStrategiesResponse {
+  strategies: RSIStrategy[]
+  total_allocation: string
+  total_invested: string
+  total_profit_loss: string
+  active_strategies: number
+}
+
+// MACD Strategy Types
+export interface MACDConfig {
+  fast_period: number
+  slow_period: number
+  signal_period: number
+  investment_amount: string
+  stop_loss_percentage?: string
+  take_profit_percentage?: string
+}
+
+export interface MACDStrategy extends BaseStrategy {
+  config: MACDConfig
+  recent_executions: MACDExecution[]
+}
+
+export interface MACDExecution extends BaseExecution {
+  macd_value?: string
+  signal_value?: string
+  histogram?: string
+}
+
+export interface CreateMACDStrategyRequest {
+  name: string
+  asset_symbol: string
+  config: MACDConfig
+}
+
+export interface MACDStrategiesResponse {
+  strategies: MACDStrategy[]
+  total_allocation: string
+  total_invested: string
+  total_profit_loss: string
+  active_strategies: number
+}
+
+// Unified Strategy Types
+export type Strategy = DCAStrategy | GridTradingStrategy | SMACrossoverStrategy | RSIStrategy | MACDStrategy
+export type StrategyConfig = GridTradingConfig | SMACrossoverConfig | RSIConfig | MACDConfig
+export type CreateStrategyRequest = CreateDCAStrategyRequest | CreateGridTradingStrategyRequest | CreateSMACrossoverStrategyRequest | CreateRSIStrategyRequest | CreateMACDStrategyRequest
+export type StrategiesResponse = DCAStrategiesResponse | GridTradingStrategiesResponse | SMACrossoverStrategiesResponse | RSIStrategiesResponse | MACDStrategiesResponse
+
+// Strategy Info for UI
+export interface StrategyInfo {
+  type: StrategyType
+  name: string
+  description: string
+  icon: string
+  color: string
+  riskLevel: 'Low' | 'Medium' | 'High'
+  timeHorizon: string
+  features: string[]
+  minInvestment: number
+}
+
+// Backtesting Types
+export interface BacktestRequest {
+  strategy_type: StrategyType
+  asset_symbol: string
+  start_date: string
+  end_date: string
+  initial_capital: number
+  config: StrategyConfig
+}
+
+export interface BacktestResult {
+  id: string
+  strategy_type: StrategyType
+  asset_symbol: string
+  start_date: string
+  end_date: string
+  initial_capital: string
+  final_capital: string
+  total_return: string
+  total_return_percentage: string
+  max_drawdown: string
+  max_drawdown_percentage: string
+  sharpe_ratio: string
+  sortino_ratio: string
+  win_rate: string
+  total_trades: number
+  winning_trades: number
+  losing_trades: number
+  average_win: string
+  average_loss: string
+  profit_factor: string
+  volatility: string
+  daily_returns: DailyReturn[]
+  trades: BacktestTrade[]
+  metrics: BacktestMetrics
+  created_at: string
+}
+
+export interface DailyReturn {
+  date: string
+  portfolio_value: string
+  daily_return: string
+  cumulative_return: string
+  drawdown: string
+}
+
+export interface BacktestTrade {
+  entry_date: string
+  exit_date: string
+  entry_price: string
+  exit_price: string
+  quantity: string
+  side: 'buy' | 'sell'
+  pnl: string
+  pnl_percentage: string
+  duration_hours: number
+  signal_reason: string
+}
+
+export interface BacktestMetrics {
+  total_days: number
+  trading_days: number
+  winning_days: number
+  losing_days: number
+  best_day: string
+  worst_day: string
+  longest_winning_streak: number
+  longest_losing_streak: number
+  max_consecutive_losses: number
+  recovery_factor: string
+  calmar_ratio: string
+  information_ratio: string
+}
+
+export interface BacktestComparison {
+  backtest_results: BacktestResult[]
+  comparison_metrics: {
+    strategy_types: StrategyType[]
+    performance_summary: {
+      [key in StrategyType]?: {
+        total_return: string
+        sharpe_ratio: string
+        max_drawdown: string
+        win_rate: string
+      }
+    }
+  }
+}
+
 // Strategy Templates
 export interface StrategyTemplate {
   id: string
@@ -479,18 +760,41 @@ class ApiClient {
       (headers as Record<string, string>)['X-CSRF-Token'] = this.csrfToken
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include', // This ensures cookies are sent
-    })
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include', // This ensures cookies are sent
+      })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new ApiError(response.status, errorData.message || errorData.error || 'Request failed')
+      if (!response.ok) {
+        // Handle authentication errors more specifically
+        if (response.status === 401) {
+          // Clear any stored tokens/state on unauthorized
+          this.setCsrfToken(null)
+        }
+        
+        const errorData = await response.json().catch(() => ({ 
+          error: response.status === 401 ? 'Authentication required' : 'Unknown error' 
+        }))
+        throw new ApiError(response.status, errorData.message || errorData.error || 'Request failed')
+      }
+
+      return response.json()
+    } catch (error) {
+      // Handle network errors (CORS, fetch failures, etc.)
+      if (error instanceof ApiError) {
+        throw error
+      }
+      
+      // Handle fetch/network errors
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new ApiError(0, 'Network error - please check your connection')
+      }
+      
+      // Handle other errors
+      throw new ApiError(500, 'An unexpected error occurred')
     }
-
-    return response.json()
   }
 
   // Authentication endpoints
@@ -513,7 +817,16 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.request<User>('/auth/me')
+    const response = await this.request<{
+      authenticated: boolean
+      user: User | null
+    }>('/auth/me')
+    
+    if (!response.authenticated || !response.user) {
+      throw new ApiError(401, 'User not authenticated')
+    }
+    
+    return response.user
   }
 
   async changePassword(data: ChangePasswordRequest): Promise<{ message: string }> {
@@ -553,16 +866,30 @@ class ApiClient {
   }
 
   async logout(): Promise<void> {
-    await this.request<{ message: string }>('/auth/logout', {
-      method: 'POST',
-    })
-    this.setCsrfToken(null)
+    try {
+      await this.request<{ message: string }>('/auth/logout', {
+        method: 'POST',
+      })
+    } catch (error) {
+      // Even if the logout endpoint fails (e.g., due to expired token),
+      // we should still clear the local state
+      console.error('Logout endpoint error:', error)
+    } finally {
+      // Always clear the CSRF token
+      this.setCsrfToken(null)
+    }
   }
 
   async getCsrfTokenFromServer(): Promise<string> {
-    const response = await this.request<{ csrf_token: string }>('/auth/csrf-token')
-    this.setCsrfToken(response.csrf_token)
-    return response.csrf_token
+    try {
+      const response = await this.request<{ csrf_token: string }>('/auth/csrf-token')
+      this.setCsrfToken(response.csrf_token)
+      return response.csrf_token
+    } catch (error) {
+      // If CSRF token fetch fails, clear any existing token
+      this.setCsrfToken(null)
+      throw error
+    }
   }
 
   // 2FA endpoints
@@ -702,6 +1029,8 @@ class ApiClient {
     };
   }
 
+  // Strategy endpoints - Unified approach
+  
   // DCA Strategy endpoints
   async getDCAStrategies(): Promise<DCAStrategiesResponse> {
     return this.request<DCAStrategiesResponse>('/dca/strategies')
@@ -729,6 +1058,174 @@ class ApiClient {
     return this.request<{ message: string }>(`/dca/strategies/${strategyId}`, {
       method: 'DELETE',
     })
+  }
+
+  // Grid Trading Strategy endpoints
+  async getGridTradingStrategies(): Promise<GridTradingStrategiesResponse> {
+    return this.request<GridTradingStrategiesResponse>('/grid-trading/strategies')
+  }
+
+  async createGridTradingStrategy(data: CreateGridTradingStrategyRequest): Promise<GridTradingStrategy> {
+    return this.request<GridTradingStrategy>('/grid-trading/strategies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getGridTradingStrategy(strategyId: string): Promise<GridTradingStrategy> {
+    return this.request<GridTradingStrategy>(`/grid-trading/strategies/${strategyId}`)
+  }
+
+  async updateGridTradingStrategy(strategyId: string, data: Partial<CreateGridTradingStrategyRequest>): Promise<GridTradingStrategy> {
+    return this.request<GridTradingStrategy>(`/grid-trading/strategies/${strategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteGridTradingStrategy(strategyId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/grid-trading/strategies/${strategyId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // SMA Crossover Strategy endpoints
+  async getSMACrossoverStrategies(): Promise<SMACrossoverStrategiesResponse> {
+    return this.request<SMACrossoverStrategiesResponse>('/sma-crossover/strategies')
+  }
+
+  async createSMACrossoverStrategy(data: CreateSMACrossoverStrategyRequest): Promise<SMACrossoverStrategy> {
+    return this.request<SMACrossoverStrategy>('/sma-crossover/strategies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getSMACrossoverStrategy(strategyId: string): Promise<SMACrossoverStrategy> {
+    return this.request<SMACrossoverStrategy>(`/sma-crossover/strategies/${strategyId}`)
+  }
+
+  async updateSMACrossoverStrategy(strategyId: string, data: Partial<CreateSMACrossoverStrategyRequest>): Promise<SMACrossoverStrategy> {
+    return this.request<SMACrossoverStrategy>(`/sma-crossover/strategies/${strategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteSMACrossoverStrategy(strategyId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/sma-crossover/strategies/${strategyId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // RSI Strategy endpoints
+  async getRSIStrategies(): Promise<RSIStrategiesResponse> {
+    return this.request<RSIStrategiesResponse>('/rsi/strategies')
+  }
+
+  async createRSIStrategy(data: CreateRSIStrategyRequest): Promise<RSIStrategy> {
+    return this.request<RSIStrategy>('/rsi/strategies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getRSIStrategy(strategyId: string): Promise<RSIStrategy> {
+    return this.request<RSIStrategy>(`/rsi/strategies/${strategyId}`)
+  }
+
+  async updateRSIStrategy(strategyId: string, data: Partial<CreateRSIStrategyRequest>): Promise<RSIStrategy> {
+    return this.request<RSIStrategy>(`/rsi/strategies/${strategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteRSIStrategy(strategyId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/rsi/strategies/${strategyId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // MACD Strategy endpoints
+  async getMACDStrategies(): Promise<MACDStrategiesResponse> {
+    return this.request<MACDStrategiesResponse>('/macd/strategies')
+  }
+
+  async createMACDStrategy(data: CreateMACDStrategyRequest): Promise<MACDStrategy> {
+    return this.request<MACDStrategy>('/macd/strategies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getMACDStrategy(strategyId: string): Promise<MACDStrategy> {
+    return this.request<MACDStrategy>(`/macd/strategies/${strategyId}`)
+  }
+
+  async updateMACDStrategy(strategyId: string, data: Partial<CreateMACDStrategyRequest>): Promise<MACDStrategy> {
+    return this.request<MACDStrategy>(`/macd/strategies/${strategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteMACDStrategy(strategyId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/macd/strategies/${strategyId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Unified Strategy Management
+  async getAllStrategies(): Promise<{
+    dca: DCAStrategiesResponse
+    gridTrading: GridTradingStrategiesResponse
+    smaCrossover: SMACrossoverStrategiesResponse
+    rsi: RSIStrategiesResponse
+    macd: MACDStrategiesResponse
+  }> {
+    const [dca, gridTrading, smaCrossover, rsi, macd] = await Promise.all([
+      this.getDCAStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
+      this.getGridTradingStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
+      this.getSMACrossoverStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
+      this.getRSIStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
+      this.getMACDStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 }))
+    ])
+
+    return { dca, gridTrading, smaCrossover, rsi, macd }
+  }
+
+  // Backtesting endpoints
+  async runBacktest(data: BacktestRequest): Promise<BacktestResult> {
+    return this.request<BacktestResult>('/backtesting/run', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getBacktestResult(backtestId: string): Promise<BacktestResult> {
+    return this.request<BacktestResult>(`/backtesting/results/${backtestId}`)
+  }
+
+  async getUserBacktests(): Promise<BacktestResult[]> {
+    return this.request<BacktestResult[]>('/backtesting/results')
+  }
+
+  async deleteBacktest(backtestId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/backtesting/results/${backtestId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async compareStrategies(backtestIds: string[]): Promise<BacktestComparison> {
+    return this.request<BacktestComparison>('/backtesting/compare', {
+      method: 'POST',
+      body: JSON.stringify({ backtest_ids: backtestIds }),
+    })
+  }
+
+  async getAvailableAssets(): Promise<string[]> {
+    return this.request<string[]>('/backtesting/assets')
   }
 
   async pauseDCAStrategy(strategyId: string): Promise<{ message: string }> {

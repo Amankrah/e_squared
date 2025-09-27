@@ -1,0 +1,1057 @@
+warning: unused import: `Session`
+ --> src\middleware\auth.rs:5:21
+  |
+5 | use actix_session::{Session, SessionExt};
+  |                     ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `prelude`
+ --> src\strategies\indicators\momentum.rs:2:29
+  |
+2 | use rust_decimal::{Decimal, prelude::*};
+  |                             ^^^^^^^
+
+warning: unused import: `prelude`
+  --> src\strategies\indicators\mod.rs:12:29
+   |
+12 | use rust_decimal::{Decimal, prelude::*};
+   |                             ^^^^^^^
+
+warning: unused variable: `signal_period`
+   --> src\strategies\indicators\mod.rs:160:69
+    |
+160 | pub fn macd(data: &[Kline], fast_period: usize, slow_period: usize, signal_period: usize) -> Option<MACD> {
+    |                                                                     ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_signal_period`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `d_period`
+   --> src\strategies\indicators\mod.rs:186:52
+    |
+186 | pub fn stochastic(data: &[Kline], k_period: usize, d_period: usize) -> Option<Stochastic> {
+    |                                                    ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_d_period`
+
+warning: unused variable: `position`
+  --> src\strategies\core\traits.rs:70:44
+   |
+70 |     async fn on_position_update(&mut self, position: &PositionUpdate) -> Result<(), AppError> {
+   |                                            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_position`
+
+warning: unused variable: `order`
+  --> src\strategies\core\traits.rs:76:41
+   |
+76 |     async fn on_order_update(&mut self, order: &OrderUpdate) -> Result<(), AppError> {
+   |                                         ^^^^^ help: if this is intentional, prefix it with an underscore: `_order`
+
+warning: unused variable: `symbol`
+  --> src\strategies\core\traits.rs:94:31
+   |
+94 |     fn supports_symbol(&self, symbol: &str) -> bool {
+   |                               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_symbol`
+
+warning: unused variable: `e`
+   --> src\strategies\core\registry.rs:286:50
+    |
+286 |     let mut registry = registry.write().map_err(|e| {
+    |                                                  ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\strategies\core\registry.rs:296:45
+    |
+296 |     let registry = registry.read().map_err(|e| {
+    |                                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\strategies\core\registry.rs:306:45
+    |
+306 |     let registry = registry.read().map_err(|e| {
+    |                                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\strategies\core\registry.rs:316:45
+    |
+316 |     let registry = registry.read().map_err(|e| {
+    |                                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src\strategies\core\registry.rs:326:45
+    |
+326 |     let registry = registry.read().map_err(|e| {
+    |                                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `config`
+   --> src\strategies\implementations\sma_crossover\strategy.rs:110:13
+    |
+110 |         let config = self.config.as_ref().unwrap();
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `histogram_abs`
+   --> src\strategies\implementations\macd_strategy\strategy.rs:195:95
+    |
+195 | ... signal: &MACDSignal, histogram_abs: Decimal, histogram_change: Decimal) -> Decimal {
+    |                          ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_histogram_abs`
+
+warning: unused variable: `signal_line`
+   --> src\strategies\implementations\macd_strategy\strategy.rs:226:49
+    |
+226 |     fn analyze_trend(&self, macd_line: Decimal, signal_line: Decimal, histogram: Decimal, histogram_change: Decimal) -> TrendAnalysis {
+    |                                                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_signal_line`
+
+warning: associated function `new` is never used
+  --> src\middleware\auth.rs:22:12
+   |
+21 | impl AuthMiddleware {
+   | ------------------- associated function in this implementation
+22 |     pub fn new(auth_service: AuthService) -> Self {
+   |            ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: methods `get_open_orders`, `get_order`, `get_order_history`, `cancel_order`, and `cancel_all_orders` are never used
+  --> src\exchange_connectors\traits.rs:28:14
+   |
+27 | pub trait OrderAPI: ExchangeConnector {
+   |           -------- methods in this trait
+28 |     async fn get_open_orders(&self, symbol: Option<&str>, wallet_type: WalletType) -> Result<Vec<Order>, ExchangeError>;
+   |              ^^^^^^^^^^^^^^^
+29 |
+30 |     async fn get_order(&self, order_id: &str, symbol: &str, wallet_type: WalletType) -> Result<Order, ExchangeError>;
+   |              ^^^^^^^^^
+31 |
+32 |     async fn get_order_history(
+   |              ^^^^^^^^^^^^^^^^^
+...
+41 |     async fn cancel_order(&self, order_id: &str, symbol: &str, wallet_type: WalletType) -> Result<Order, ExchangeError>;
+   |              ^^^^^^^^^^^^
+42 |
+43 |     async fn cancel_all_orders(&self, symbol: Option<&str>, wallet_type: WalletType) -> Result<Vec<Order>, ExchangeError>;
+   |              ^^^^^^^^^^^^^^^^^
+
+warning: methods `place_market_order`, `place_limit_order`, `place_stop_loss_order`, `place_take_profit_order`, and `place_oco_order` are never used
+  --> src\exchange_connectors\traits.rs:48:14
+   |
+47 | pub trait TradeExecutionAPI: ExchangeConnector {
+   |           ----------------- methods in this trait
+48 |     async fn place_market_order(
+   |              ^^^^^^^^^^^^^^^^^^
+...
+57 |     async fn place_limit_order(
+   |              ^^^^^^^^^^^^^^^^^
+...
+67 |     async fn place_stop_loss_order(
+   |              ^^^^^^^^^^^^^^^^^^^^^
+...
+77 |     async fn place_take_profit_order(
+   |              ^^^^^^^^^^^^^^^^^^^^^^^
+...
+87 |     async fn place_oco_order(
+   |              ^^^^^^^^^^^^^^^
+
+warning: methods `get_ticker`, `get_order_book`, `get_recent_trades`, and `get_klines` are never used
+   --> src\exchange_connectors\traits.rs:101:14
+    |
+100 | pub trait MarketDataAPI: ExchangeConnector {
+    |           ------------- methods in this trait
+101 |     async fn get_ticker(&self, symbol: &str) -> Result<Ticker, ExchangeError>;
+    |              ^^^^^^^^^^
+102 |
+103 |     async fn get_order_book(&self, symbol: &str, limit: Option<u32>) -> Result<OrderBook, ExchangeError>;
+    |              ^^^^^^^^^^^^^^
+104 |
+105 |     async fn get_recent_trades(&self, symbol: &str, limit: Option<u32>) -> Result<Vec<Trade>, ExchangeError>;
+    |              ^^^^^^^^^^^^^^^^^
+106 |
+107 |     async fn get_klines(
+    |              ^^^^^^^^^^
+
+warning: struct `BollingerBands` is never constructed
+   --> src\strategies\indicators\mod.rs:110:12
+    |
+110 | pub struct BollingerBands {
+    |            ^^^^^^^^^^^^^^
+    |
+    = note: `BollingerBands` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `bollinger_bands` is never used
+   --> src\strategies\indicators\mod.rs:116:8
+    |
+116 | pub fn bollinger_bands(data: &[Kline], period: usize, std_dev_multiplier: Decimal) -> Option<BollingerBands> {
+    |        ^^^^^^^^^^^^^^^
+
+warning: struct `Stochastic` is never constructed
+   --> src\strategies\indicators\mod.rs:181:12
+    |
+181 | pub struct Stochastic {
+    |            ^^^^^^^^^^
+    |
+    = note: `Stochastic` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `stochastic` is never used
+   --> src\strategies\indicators\mod.rs:186:8
+    |
+186 | pub fn stochastic(data: &[Kline], k_period: usize, d_period: usize) -> Option<Stochastic> {
+    |        ^^^^^^^^^^
+
+warning: function `vwap` is never used
+   --> src\strategies\indicators\mod.rs:248:8
+    |
+248 | pub fn vwap(data: &[Kline]) -> Option<Decimal> {
+    |        ^^^^
+
+warning: function `williams_r` is never used
+   --> src\strategies\indicators\mod.rs:270:8
+    |
+270 | pub fn williams_r(data: &[Kline], period: usize) -> Option<Decimal> {
+    |        ^^^^^^^^^^
+
+warning: methods `name`, `update_batch`, `clone_box`, and `config` are never used
+  --> src\strategies\indicators\core.rs:14:8
+   |
+12 | pub trait Indicator: Send + Sync {
+   |           --------- methods in this trait
+13 |     /// Get the name of the indicator
+14 |     fn name(&self) -> String;
+   |        ^^^^
+...
+23 |     async fn update_batch(&mut self, klines: &[Kline]) -> Result<(), AppError>;
+   |              ^^^^^^^^^^^^
+...
+35 |     fn clone_box(&self) -> Box<dyn Indicator>;
+   |        ^^^^^^^^^
+...
+38 |     fn config(&self) -> serde_json::Value;
+   |        ^^^^^^
+
+warning: trait `StatefulIndicator` is never used
+  --> src\strategies\indicators\core.rs:73:11
+   |
+73 | pub trait StatefulIndicator {
+   |           ^^^^^^^^^^^^^^^^^
+
+warning: methods `create` and `metadata` are never used
+  --> src\strategies\indicators\core.rs:87:8
+   |
+85 | pub trait IndicatorFactory: Send + Sync {
+   |           ---------------- methods in this trait
+86 |     /// Create an indicator instance
+87 |     fn create(&self, params: &serde_json::Value) -> Result<Box<dyn Indicator>, AppError>;
+   |        ^^^^^^
+...
+90 |     fn metadata(&self) -> IndicatorMetadata;
+   |        ^^^^^^^^
+
+warning: fields `value`, `last_update`, and `kline_count` are never read
+   --> src\strategies\indicators\core.rs:127:9
+    |
+126 | pub struct CachedIndicatorValue {
+    |            -------------------- fields in this struct
+127 |     pub value: IndicatorValue,
+    |         ^^^^^
+128 |     pub last_update: DateTime<Utc>,
+    |         ^^^^^^^^^^^
+129 |     pub kline_count: usize,
+    |         ^^^^^^^^^^^
+    |
+    = note: `CachedIndicatorValue` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated function `new` is never used
+  --> src\strategies\indicators\moving_averages.rs:20:12
+   |
+19 | impl SMA {
+   | -------- associated function in this implementation
+20 |     pub fn new(period: usize) -> Self {
+   |            ^^^
+
+warning: associated function `new` is never used
+   --> src\strategies\indicators\moving_averages.rs:120:12
+    |
+119 | impl EMA {
+    | -------- associated function in this implementation
+120 |     pub fn new(period: usize) -> Self {
+    |            ^^^
+
+warning: associated function `new` is never used
+   --> src\strategies\indicators\moving_averages.rs:212:12
+    |
+211 | impl WMA {
+    | -------- associated function in this implementation
+212 |     pub fn new(period: usize) -> Self {
+    |            ^^^
+
+warning: associated function `new` is never used
+  --> src\strategies\indicators\momentum.rs:22:12
+   |
+21 | impl RSI {
+   | -------- associated function in this implementation
+22 |     pub fn new(period: usize) -> Self {
+   |            ^^^
+
+warning: associated function `new` is never used
+   --> src\strategies\indicators\momentum.rs:148:12
+    |
+147 | impl MACD {
+    | --------- associated function in this implementation
+148 |     pub fn new(fast_period: usize, slow_period: usize, signal_period: usize) -> Self {
+    |            ^^^
+
+warning: associated function `new` is never used
+   --> src\strategies\indicators\momentum.rs:282:12
+    |
+281 | impl Stochastic {
+    | --------------- associated function in this implementation
+282 |     pub fn new(k_period: usize, d_period: usize) -> Self {
+    |            ^^^
+
+warning: fields `max_cache_per_symbol`, `value_ttl_minutes`, `enable_profiling`, and `batch_size` are never read
+  --> src\strategies\indicators\service.rs:31:9
+   |
+29 | pub struct IndicatorServiceConfig {
+   |            ---------------------- fields in this struct
+30 |     /// Maximum cache size per symbol
+31 |     pub max_cache_per_symbol: usize,
+   |         ^^^^^^^^^^^^^^^^^^^^
+32 |     /// Cache TTL for values
+33 |     pub value_ttl_minutes: i64,
+   |         ^^^^^^^^^^^^^^^^^
+34 |     /// Enable performance profiling
+35 |     pub enable_profiling: bool,
+   |         ^^^^^^^^^^^^^^^^
+36 |     /// Batch update size
+37 |     pub batch_size: usize,
+   |         ^^^^^^^^^^
+   |
+   = note: `IndicatorServiceConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `subscriber_id`, `indicator_key`, and `callback_url` are never read
+  --> src\strategies\indicators\service.rs:42:9
+   |
+41 | pub struct IndicatorSubscription {
+   |            --------------------- fields in this struct
+42 |     pub subscriber_id: Uuid,
+   |         ^^^^^^^^^^^^^
+43 |     pub indicator_key: IndicatorCacheKey,
+   |         ^^^^^^^^^^^^^
+44 |     pub callback_url: Option<String>,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `IndicatorSubscription` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: multiple associated items are never used
+   --> src\strategies\indicators\service.rs:60:12
+    |
+58  | impl IndicatorService {
+    | --------------------- associated items in this implementation
+59  |     /// Create a new indicator service
+60  |     pub fn new(config: IndicatorServiceConfig) -> Self {
+    |            ^^^
+...
+83  |     async fn register_default_indicators(&self) -> Result<(), AppError> {
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+101 |     pub async fn get_indicator(
+    |                  ^^^^^^^^^^^^^
+...
+136 |     async fn create_indicator(
+    |              ^^^^^^^^^^^^^^^^
+...
+149 |     pub async fn get_value(
+    |                  ^^^^^^^^^
+...
+176 |     pub async fn update_with_kline(
+    |                  ^^^^^^^^^^^^^^^^^
+...
+205 |     pub async fn update_batch(
+    |                  ^^^^^^^^^^^^
+...
+224 |     async fn update_single_indicator(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^
+...
+263 |     pub async fn subscribe(
+    |                  ^^^^^^^^^
+...
+293 |     pub async fn unsubscribe(&self, subscriber_id: Uuid) -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^
+...
+307 |     pub async fn cleanup_cache(&self) -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^^^
+...
+327 |     pub async fn get_stats(&self) -> IndicatorServiceStats {
+    |                  ^^^^^^^^^
+...
+341 |     pub async fn list_indicators(&self) -> Result<Vec<IndicatorMetadata>, AppError> {
+    |                  ^^^^^^^^^^^^^^^
+...
+346 |     fn hash_params(&self, params: &serde_json::Value) -> u64 {
+    |        ^^^^^^^^^^^
+
+warning: struct `IndicatorServiceStats` is never constructed
+   --> src\strategies\indicators\service.rs:369:12
+    |
+369 | pub struct IndicatorServiceStats {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `IndicatorServiceStats` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: struct `SMAFactory` is never constructed
+   --> src\strategies\indicators\service.rs:377:8
+    |
+377 | struct SMAFactory;
+    |        ^^^^^^^^^^
+
+warning: struct `EMAFactory` is never constructed
+   --> src\strategies\indicators\service.rs:378:8
+    |
+378 | struct EMAFactory;
+    |        ^^^^^^^^^^
+
+warning: struct `WMAFactory` is never constructed
+   --> src\strategies\indicators\service.rs:379:8
+    |
+379 | struct WMAFactory;
+    |        ^^^^^^^^^^
+
+warning: struct `RSIFactory` is never constructed
+   --> src\strategies\indicators\service.rs:380:8
+    |
+380 | struct RSIFactory;
+    |        ^^^^^^^^^^
+
+warning: struct `MACDFactory` is never constructed
+   --> src\strategies\indicators\service.rs:381:8
+    |
+381 | struct MACDFactory;
+    |        ^^^^^^^^^^^
+
+warning: struct `StochasticFactory` is never constructed
+   --> src\strategies\indicators\service.rs:382:8
+    |
+382 | struct StochasticFactory;
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: struct `IndicatorContext` is never constructed
+  --> src\strategies\indicators\integration.rs:15:12
+   |
+15 | pub struct IndicatorContext {
+   |            ^^^^^^^^^^^^^^^^
+   |
+   = note: `IndicatorContext` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: multiple associated items are never used
+   --> src\strategies\indicators\integration.rs:23:12
+    |
+21  | impl IndicatorContext {
+    | --------------------- associated items in this implementation
+22  |     /// Create a new indicator context
+23  |     pub fn new(symbol: String, interval: String, indicator_service: Arc<IndicatorService>) -> Self {
+    |            ^^^
+...
+32  |     pub async fn get_indicator(
+    |                  ^^^^^^^^^^^^^
+...
+43  |     pub async fn sma(&self, period: usize) -> Result<Option<Decimal>, AppError> {
+    |                  ^^^
+...
+56  |     pub async fn ema(&self, period: usize) -> Result<Option<Decimal>, AppError> {
+    |                  ^^^
+...
+69  |     pub async fn rsi(&self, period: usize) -> Result<Option<Decimal>, AppError> {
+    |                  ^^^
+...
+82  |     pub async fn macd(
+    |                  ^^^^
+...
+107 |     pub async fn bollinger_bands(
+    |                  ^^^^^^^^^^^^^^^
+...
+130 |     pub async fn stochastic(
+    |                  ^^^^^^^^^^
+...
+153 |     pub async fn preload_indicators(
+    |                  ^^^^^^^^^^^^^^^^^^
+
+warning: method `with_indicators` is never used
+   --> src\strategies\indicators\integration.rs:180:8
+    |
+178 | pub trait BacktestEngineIndicatorExt {
+    |           -------------------------- method in this trait
+179 |     /// Run backtest with indicator service
+180 |     fn with_indicators(self, indicator_service: Arc<IndicatorService>) -> BacktestEngineWithIndicators;
+    |        ^^^^^^^^^^^^^^^
+
+warning: fields `engine` and `indicator_service` are never read
+   --> src\strategies\indicators\integration.rs:194:5
+    |
+193 | pub struct BacktestEngineWithIndicators {
+    |            ---------------------------- fields in this struct
+194 |     engine: BacktestEngine,
+    |     ^^^^^^
+195 |     indicator_service: Arc<IndicatorService>,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: trait `ExecutionEngineIndicatorExt` is never used
+   --> src\strategies\indicators\integration.rs:211:11
+    |
+211 | pub trait ExecutionEngineIndicatorExt {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `LiveIndicatorProcessor` is never constructed
+   --> src\strategies\indicators\integration.rs:232:12
+    |
+232 | pub struct LiveIndicatorProcessor {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `start_monitoring`, `stop_monitoring`, `process_kline`, and `get_stats` are never used
+   --> src\strategies\indicators\integration.rs:239:12
+    |
+237 | impl LiveIndicatorProcessor {
+    | --------------------------- associated items in this implementation
+238 |     /// Create a new live processor
+239 |     pub fn new(indicator_service: Arc<IndicatorService>) -> Self {
+    |            ^^^
+...
+247 |     pub async fn start_monitoring(&self, symbol: String, interval: String) -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^^^^^^
+...
+260 |     pub async fn stop_monitoring(&self, symbol: &str, interval: &str) -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^^^^^
+...
+268 |     pub async fn process_kline(&self, symbol: &str, interval: &str, kline: &Kline) -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^^^
+...
+284 |     pub async fn get_stats(&self) -> LiveProcessorStats {
+    |                  ^^^^^^^^^
+
+warning: struct `LiveProcessorStats` is never constructed
+   --> src\strategies\indicators\integration.rs:297:12
+    |
+297 | pub struct LiveProcessorStats {
+    |            ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `LiveProcessorStats` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `create_indicator_service` is never used
+   --> src\strategies\indicators\integration.rs:308:12
+    |
+308 |     pub fn create_indicator_service() -> Arc<IndicatorService> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_indicator_service_with_config` is never used
+   --> src\strategies\indicators\integration.rs:314:12
+    |
+314 |     pub fn create_indicator_service_with_config(config: IndicatorServiceConfig) -> Arc<IndicatorService> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `setup_strategy_indicators` is never used
+   --> src\strategies\indicators\integration.rs:319:18
+    |
+319 |     pub async fn setup_strategy_indicators(
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `EnhancedDCAStrategy` is never constructed
+  --> src\strategies\indicators\examples.rs:10:12
+   |
+10 | pub struct EnhancedDCAStrategy {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `DCAStrategyConfig` is never constructed
+  --> src\strategies\indicators\examples.rs:18:12
+   |
+18 | pub struct DCAStrategyConfig {
+   |            ^^^^^^^^^^^^^^^^^
+   |
+   = note: `DCAStrategyConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `new`, `should_buy`, `calculate_amount`, and `update` are never used
+   --> src\strategies\indicators\examples.rs:29:18
+    |
+27  | impl EnhancedDCAStrategy {
+    | ------------------------ associated items in this implementation
+28  |     /// Create a new enhanced DCA strategy
+29  |     pub async fn new(
+    |                  ^^^
+...
+64  |     pub async fn should_buy(&self) -> Result<bool, AppError> {
+    |                  ^^^^^^^^^^
+...
+98  |     pub async fn calculate_amount(&self) -> Result<Decimal, AppError> {
+    |                  ^^^^^^^^^^^^^^^^
+...
+121 |     pub async fn update(&self, kline: &Kline) -> Result<(), AppError> {
+    |                  ^^^^^^
+
+warning: struct `TrendFollowStrategy` is never constructed
+   --> src\strategies\indicators\examples.rs:130:12
+    |
+130 | pub struct TrendFollowStrategy {
+    |            ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `TrendStrategyConfig` is never constructed
+   --> src\strategies\indicators\examples.rs:136:12
+    |
+136 | pub struct TrendStrategyConfig {
+    |            ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `TrendStrategyConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `new`, `analyze_trend`, `analyze_ema_alignment`, `analyze_momentum`, and `calculate_confidence` are never used
+   --> src\strategies\indicators\examples.rs:145:18
+    |
+144 | impl TrendFollowStrategy {
+    | ------------------------ associated items in this implementation
+145 |     pub async fn new(
+    |                  ^^^
+...
+185 |     pub async fn analyze_trend(&self) -> Result<TrendSignal, AppError> {
+    |                  ^^^^^^^^^^^^^
+...
+215 |     fn analyze_ema_alignment(&self, emas: &[Decimal]) -> TrendDirection {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+233 |     fn analyze_momentum(&self, rsi: Option<Decimal>, macd: Option<(Decimal, Decimal, Decimal)>) -> MomentumStrength {
+    |        ^^^^^^^^^^^^^^^^
+...
+270 |     fn calculate_confidence(&self, emas: &[Decimal], rsi: Option<Decimal>, macd: Option<(Decimal, Decimal, Decimal)>) -> Decimal {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `TrendSignal` is never constructed
+   --> src\strategies\indicators\examples.rs:301:12
+    |
+301 | pub struct TrendSignal {
+    |            ^^^^^^^^^^^
+    |
+    = note: `TrendSignal` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: enum `TrendDirection` is never used
+   --> src\strategies\indicators\examples.rs:308:10
+    |
+308 | pub enum TrendDirection {
+    |          ^^^^^^^^^^^^^^
+    |
+    = note: `TrendDirection` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: enum `MomentumStrength` is never used
+   --> src\strategies\indicators\examples.rs:315:10
+    |
+315 | pub enum MomentumStrength {
+    |          ^^^^^^^^^^^^^^^^
+    |
+    = note: `MomentumStrength` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `setup_backtest_with_indicators` is never used
+   --> src\strategies\indicators\examples.rs:328:18
+    |
+328 |     pub async fn setup_backtest_with_indicators() -> Result<(), AppError> {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> src\strategies\core\traits.rs:47:8
+    |
+45  | pub trait Strategy: Send + Sync {
+    |           -------- methods in this trait
+46  |     /// Strategy metadata
+47  |     fn metadata(&self) -> StrategyMetadata;
+    |        ^^^^^^^^
+...
+64  |     fn validate_parameters(&self, parameters: &Value) -> Result<(), AppError>;
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+67  |     fn parameter_schema(&self) -> Value;
+    |        ^^^^^^^^^^^^^^^^
+...
+70  |     async fn on_position_update(&mut self, position: &PositionUpdate) -> Result<(), AppError> {
+    |              ^^^^^^^^^^^^^^^^^^
+...
+76  |     async fn on_order_update(&mut self, order: &OrderUpdate) -> Result<(), AppError> {
+    |              ^^^^^^^^^^^^^^^
+...
+82  |     async fn on_stop(&mut self) -> Result<(), AppError> {
+    |              ^^^^^^^
+...
+88  |     fn get_state(&self) -> Result<Value, AppError>;
+    |        ^^^^^^^^^
+...
+91  |     fn restore_state(&mut self, state: &Value) -> Result<(), AppError>;
+    |        ^^^^^^^^^^^^^
+...
+94  |     fn supports_symbol(&self, symbol: &str) -> bool {
+    |        ^^^^^^^^^^^^^^^
+...
+100 |     fn min_data_points(&self) -> usize {
+    |        ^^^^^^^^^^^^^^^
+...
+105 |     fn get_metrics(&self) -> StrategyMetrics {
+    |        ^^^^^^^^^^^
+
+warning: fields `interval` and `mode` are never read
+   --> src\strategies\core\traits.rs:133:9
+    |
+129 | pub struct StrategyContext {
+    |            --------------- fields in this struct
+...
+133 |     pub interval: String,
+    |         ^^^^^^^^
+134 |     pub mode: StrategyMode,
+    |         ^^^^
+    |
+    = note: `StrategyContext` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `PositionUpdate` is never constructed
+   --> src\strategies\core\traits.rs:167:12
+    |
+167 | pub struct PositionUpdate {
+    |            ^^^^^^^^^^^^^^
+    |
+    = note: `PositionUpdate` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `order_id` and `quantity` are never read
+   --> src\strategies\core\traits.rs:179:9
+    |
+178 | pub struct OrderUpdate {
+    |            ----------- fields in this struct
+179 |     pub order_id: String,
+    |         ^^^^^^^^
+...
+183 |     pub quantity: Decimal,
+    |         ^^^^^^^^
+    |
+    = note: `OrderUpdate` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `StrategyConfig` is never constructed
+   --> src\strategies\core\traits.rs:226:12
+    |
+226 | pub struct StrategyConfig {
+    |            ^^^^^^^^^^^^^^
+
+warning: trait `BacktestableStrategy` is never used
+   --> src\strategies\core\traits.rs:239:11
+    |
+239 | pub trait BacktestableStrategy: Strategy {
+    |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `start_live_execution`, `stop_live_execution`, `is_running`, and `next_execution_time` are never used
+   --> src\strategies\core\traits.rs:280:14
+    |
+278 | pub trait LiveExecutableStrategy: Strategy {
+    |           ---------------------- methods in this trait
+279 |     /// Start live execution
+280 |     async fn start_live_execution(&mut self, context: &StrategyContext) -> Result<(), AppError>;
+    |              ^^^^^^^^^^^^^^^^^^^^
+...
+283 |     async fn stop_live_execution(&mut self) -> Result<(), AppError>;
+    |              ^^^^^^^^^^^^^^^^^^^
+...
+286 |     fn is_running(&self) -> bool;
+    |        ^^^^^^^^^^
+...
+289 |     fn next_execution_time(&self) -> Option<DateTime<Utc>>;
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: methods `pause`, `resume`, and `is_paused` are never used
+   --> src\strategies\core\traits.rs:296:14
+    |
+294 | pub trait ControllableStrategy: Strategy {
+    |           -------------------- methods in this trait
+295 |     /// Pause strategy execution
+296 |     async fn pause(&mut self) -> Result<(), AppError>;
+    |              ^^^^^
+...
+299 |     async fn resume(&mut self) -> Result<(), AppError>;
+    |              ^^^^^^
+...
+302 |     fn is_paused(&self) -> bool;
+    |        ^^^^^^^^^
+
+warning: fields `category`, `risk_level`, `mode`, `min_balance`, `tags`, and `search_text` are never read
+  --> src\strategies\core\registry.rs:24:9
+   |
+23 | pub struct StrategyFilter {
+   |            -------------- fields in this struct
+24 |     pub category: Option<StrategyCategory>,
+   |         ^^^^^^^^
+25 |     pub risk_level: Option<RiskLevel>,
+   |         ^^^^^^^^^^
+26 |     pub mode: Option<StrategyMode>,
+   |         ^^^^
+27 |     pub min_balance: Option<rust_decimal::Decimal>,
+   |         ^^^^^^^^^^^
+28 |     pub tags: Option<Vec<String>>,
+   |         ^^^^
+29 |     pub search_text: Option<String>,
+   |         ^^^^^^^^^^^
+   |
+   = note: `StrategyFilter` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: multiple methods are never used
+   --> src\strategies\core\registry.rs:75:12
+    |
+46  | impl StrategyRegistry {
+    | --------------------- methods in this implementation
+...
+75  |     pub fn unregister(&mut self, strategy_id: &str) -> Result<(), AppError> {
+    |            ^^^^^^^^^^
+...
+117 |     pub fn list_filtered(&self, filter: &StrategyFilter) -> Vec<StrategyListItem> {
+    |            ^^^^^^^^^^^^^
+...
+135 |     pub fn get_by_category(&self, category: &StrategyCategory) -> Vec<StrategyListItem> {
+    |            ^^^^^^^^^^^^^^^
+...
+148 |     pub fn get_by_risk_level(&self, risk_level: &RiskLevel) -> Vec<StrategyListItem> {
+    |            ^^^^^^^^^^^^^^^^^
+...
+161 |     pub fn get_by_mode(&self, mode: &StrategyMode) -> Vec<StrategyListItem> {
+    |            ^^^^^^^^^^^
+...
+174 |     pub fn contains(&self, strategy_id: &str) -> bool {
+    |            ^^^^^^^^
+...
+179 |     pub fn get_strategy_ids(&self) -> Vec<String> {
+    |            ^^^^^^^^^^^^^^^^
+...
+184 |     pub fn get_stats(&self) -> RegistryStats {
+    |            ^^^^^^^^^
+...
+212 |     fn matches_filter(&self, metadata: &StrategyMetadata, filter: &StrategyFilter) -> bool {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `list_strategies_filtered` is never used
+   --> src\strategies\core\registry.rs:324:8
+    |
+324 | pub fn list_strategies_filtered(filter: &StrategyFilter) -> Result<Vec<StrategyListItem>, AppError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> src\strategies\core\factory.rs:17:12
+   |
+12 | / impl<T> StrategyFactoryImpl<T>
+13 | | where
+14 | |     T: Strategy + 'static,
+   | |__________________________- associated function in this implementation
+...
+17 |       pub fn new(metadata: StrategyMetadata, creator: fn() -> T) -> Self {
+   |              ^^^
+
+warning: struct `StrategyFactoryBuilder` is never constructed
+  --> src\strategies\core\factory.rs:36:12
+   |
+36 | pub struct StrategyFactoryBuilder {
+   |            ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new` and `with_creator` are never used
+  --> src\strategies\core\factory.rs:42:12
+   |
+40 | impl StrategyFactoryBuilder {
+   | --------------------------- associated items in this implementation
+41 |     /// Start building a factory with metadata
+42 |     pub fn new(metadata: StrategyMetadata) -> Self {
+   |            ^^^
+...
+47 |     pub fn with_creator<T>(self, creator: fn() -> T) -> StrategyFactoryImpl<T>
+   |            ^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> src\strategies\core\factory.rs:72:12
+   |
+70 | impl AdvancedStrategyFactory {
+   | ---------------------------- associated function in this implementation
+71 |     /// Create a new advanced factory
+72 |     pub fn new<F>(metadata: StrategyMetadata, creator: F) -> Self
+   |            ^^^
+
+warning: associated items `new` and `create_with_config` are never used
+   --> src\strategies\core\factory.rs:102:12
+    |
+100 | impl ConfigurableStrategyFactory {
+    | -------------------------------- associated items in this implementation
+101 |     /// Create a new configurable factory
+102 |     pub fn new<F>(
+    |            ^^^
+...
+118 |     pub fn create_with_config(&self, config: &Value) -> Result<Box<dyn Strategy>, AppError> {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: field `factories` is never read
+   --> src\strategies\core\factory.rs:141:5
+    |
+140 | pub struct StrategyFactoryManager {
+    |            ---------------------- field in this struct
+141 |     factories: std::collections::HashMap<String, Box<dyn StrategyFactory>>,
+    |     ^^^^^^^^^
+
+warning: methods `register`, `create`, `get_strategy_ids`, and `get_metadata` are never used
+   --> src\strategies\core\factory.rs:153:12
+    |
+144 | impl StrategyFactoryManager {
+    | --------------------------- methods in this implementation
+...
+153 |     pub fn register<F>(&mut self, factory: F) -> Result<(), AppError>
+    |            ^^^^^^^^
+...
+163 |     pub fn create(&self, strategy_id: &str) -> Result<Box<dyn Strategy>, AppError> {
+    |            ^^^^^^
+...
+171 |     pub fn get_strategy_ids(&self) -> Vec<String> {
+    |            ^^^^^^^^^^^^^^^^
+...
+176 |     pub fn get_metadata(&self, strategy_id: &str) -> Result<&StrategyMetadata, AppError> {
+    |            ^^^^^^^^^^^^
+
+warning: trait `FactorizableStrategy` is never used
+   --> src\strategies\core\factory.rs:191:11
+    |
+191 | pub trait FactorizableStrategy: Strategy + Default + 'static {
+    |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `with_stop_loss` and `with_take_profit` are never used
+   --> src\strategies\core\signals.rs:249:12
+    |
+171 | impl StrategySignal {
+    | ------------------- methods in this implementation
+...
+249 |     pub fn with_stop_loss(mut self, stop_loss: StopLossType) -> Self {
+    |            ^^^^^^^^^^^^^^
+...
+267 |     pub fn with_take_profit(mut self, take_profit: TakeProfitType) -> Self {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: multiple methods are never used
+   --> src\strategies\core\context.rs:72:12
+    |
+23  | impl StrategyContextBuilder {
+    | --------------------------- methods in this implementation
+...
+72  |     pub fn current_time(mut self, current_time: DateTime<Utc>) -> Self {
+    |            ^^^^^^^^^^^^
+...
+84  |     pub fn add_historical_data(mut self, klines: &[Kline]) -> Self {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+102 |     pub fn current_positions(mut self, current_positions: Vec<Position>) -> Self {
+    |            ^^^^^^^^^^^^^^^^^
+...
+108 |     pub fn add_position(mut self, position: Position) -> Self {
+    |            ^^^^^^^^^^^^
+...
+114 |     pub fn market_data(mut self, market_data: MarketData) -> Self {
+    |            ^^^^^^^^^^^
+...
+120 |     pub fn volume_24h(mut self, volume: Decimal) -> Self {
+    |            ^^^^^^^^^^
+...
+126 |     pub fn price_change_24h(mut self, change: Decimal) -> Self {
+    |            ^^^^^^^^^^^^^^^^
+...
+132 |     pub fn bid_price(mut self, bid: Decimal) -> Self {
+    |            ^^^^^^^^^
+...
+138 |     pub fn ask_price(mut self, ask: Decimal) -> Self {
+    |            ^^^^^^^^^
+
+warning: multiple associated items are never used
+   --> src\strategies\core\context.rs:199:12
+    |
+197 | impl super::traits::StrategyContext {
+    | ----------------------------------- associated items in this implementation
+198 |     /// Get the latest kline data
+199 |     pub fn latest_kline(&self) -> Option<&Kline> {
+    |            ^^^^^^^^^^^^
+...
+204 |     pub fn recent_klines(&self, count: usize) -> &[Kline] {
+    |            ^^^^^^^^^^^^^
+...
+216 |     pub fn has_position(&self) -> bool {
+    |            ^^^^^^^^^^^^
+...
+228 |     pub fn unrealized_pnl(&self) -> Decimal {
+    |            ^^^^^^^^^^^^^^
+...
+235 |     pub fn unrealized_pnl_percentage(&self) -> Decimal {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+242 |     pub fn has_min_data(&self, min_count: usize) -> bool {
+    |            ^^^^^^^^^^^^
+...
+260 |     pub fn is_market_liquid(&self, max_spread_percentage: Decimal) -> bool {
+    |            ^^^^^^^^^^^^^^^^
+...
+267 |     pub fn update_market_data(&mut self, market_data: MarketData) {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+272 |     pub fn update_current_price(&mut self, price: Decimal) {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+278 |     pub fn add_kline(&mut self, kline: Kline) {
+    |            ^^^^^^^^^
+...
+288 |     pub fn update_positions(&mut self, positions: Vec<Position>) {
+    |            ^^^^^^^^^^^^^^^^
+...
+293 |     pub fn update_balance(&mut self, balance: Decimal) {
+    |            ^^^^^^^^^^^^^^
+...
+298 |     pub fn for_backtest(
+    |            ^^^^^^^^^^^^
+...
+318 |     pub fn for_live_trading(
+    |            ^^^^^^^^^^^^^^^^
+
+warning: `e_squared_backend` (bin "e_squared_backend") generated 89 warnings (run `cargo fix --bin "e_squared_backend"` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running `target\debug\e_squared_backend.exe`
+[2m2025-09-25T16:32:16.446519Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m Logging system initialized
+[2m2025-09-25T16:32:16.446566Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m 🚀 Starting E² Algorithmic Trading Platform
+[2m2025-09-25T16:32:16.446593Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m ✓ Configuration loaded successfully
+[2m2025-09-25T16:32:16.446601Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m   - Database: sqlite:./e_squared.db
+[2m2025-09-25T16:32:16.446609Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m   - Server: 127.0.0.1:8080
+[2m2025-09-25T16:32:16.446616Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m   - CORS Origin: http://localhost:3000
+[2m2025-09-25T16:32:16.446634Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Connecting to database: sqlite:./e_squared.db
+[2m2025-09-25T16:32:16.448230Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"PRAGMA foreign_keys = ON; …" [3mdb.statement[0m[2m=[0m"\n\nPRAGMA foreign_keys = ON;\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m68.2µs [3melapsed_secs[0m[2m=[0m6.82e-5
+[2m2025-09-25T16:32:16.448364Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Setting up database schema...
+[2m2025-09-25T16:32:16.448383Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Creating database tables...
+[2m2025-09-25T16:32:16.453244Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS users (\n  id TEXT PRIMARY KEY,\n  email TEXT UNIQUE NOT NULL,\n  password_hash TEXT NOT NULL,\n  is_active BOOLEAN NOT NULL DEFAULT 1,\n  is_verified BOOLEAN NOT NULL DEFAULT 0,\n  totp_secret TEXT,\n  totp_enabled BOOLEAN NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m582.9µs [3melapsed_secs[0m[2m=[0m0.0005829
+[2m2025-09-25T16:32:16.453394Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: users
+[2m2025-09-25T16:32:16.456175Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS user_profiles (\n  id TEXT PRIMARY KEY,\n  user_id TEXT UNIQUE NOT NULL,\n  name TEXT NOT NULL,\n  email TEXT NOT NULL,\n  phone TEXT,\n  location TEXT,\n  bio TEXT,\n  join_date TEXT NOT NULL,\n  avatar_url TEXT,\n  is_verified BOOLEAN NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m133.7µs [3melapsed_secs[0m[2m=[0m0.0001337
+[2m2025-09-25T16:32:16.456251Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: user_profiles
+[2m2025-09-25T16:32:16.459963Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS user_sessions (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  session_token TEXT UNIQUE NOT NULL,\n  device_info TEXT NOT NULL,\n  ip_address TEXT NOT NULL,\n  location TEXT,\n  user_agent TEXT NOT NULL,\n  is_current BOOLEAN NOT NULL DEFAULT 0,\n  last_activity TEXT NOT NULL,\n  created_at TEXT NOT NULL,\n  expires_at TEXT NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m473.3µs [3melapsed_secs[0m[2m=[0m0.0004733
+[2m2025-09-25T16:32:16.460101Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: user_sessions
+[2m2025-09-25T16:32:16.464055Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS exchange_connections (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  exchange_name TEXT NOT NULL,\n  display_name TEXT NOT NULL,\n  encrypted_api_key TEXT NOT NULL,\n  encrypted_api_secret TEXT NOT NULL,\n  encrypted_passphrase TEXT,\n  api_key_nonce TEXT NOT NULL,\n  api_secret_nonce TEXT NOT NULL,\n  passphrase_nonce TEXT,\n  api_key_salt TEXT NOT NULL,\n  api_secret_salt TEXT NOT NULL,\n  passphrase_salt TEXT,\n  is_active BOOLEAN NOT NULL DEFAULT 1,\n  last_sync TEXT,\n  connection_status TEXT NOT NULL DEFAULT 'pending',\n  last_error TEXT,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m194.8µs [3melapsed_secs[0m[2m=[0m0.0001948
+[2m2025-09-25T16:32:16.464267Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: exchange_connections
+[2m2025-09-25T16:32:16.467286Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS wallet_balances (\n  id TEXT PRIMARY KEY,\n  exchange_connection_id TEXT NOT NULL,\n  wallet_type TEXT NOT NULL,\n  asset_symbol TEXT NOT NULL,\n  free_balance TEXT NOT NULL,\n  locked_balance TEXT NOT NULL,\n  total_balance TEXT NOT NULL,\n  usd_value TEXT,\n  last_updated TEXT NOT NULL,\n  created_at TEXT NOT NULL,\n  FOREIGN KEY (exchange_connection_id) REFERENCES exchange_connections (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m166.2µs [3melapsed_secs[0m[2m=[0m0.0001662
+[2m2025-09-25T16:32:16.467412Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: wallet_balances
+[2m2025-09-25T16:32:16.482776Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS dca_strategies (\n  id TEXT PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  name TEXT NOT NULL,\n  asset_symbol TEXT NOT NULL,\n  total_allocation TEXT NOT NULL,\n  base_tranche_size TEXT NOT NULL,\n  status TEXT NOT NULL DEFAULT 'active',\n  strategy_type TEXT NOT NULL DEFAULT 'adaptive_zone',\n  sentiment_multiplier BOOLEAN NOT NULL DEFAULT 0,\n  volatility_adjustment BOOLEAN NOT NULL DEFAULT 0,\n  fear_greed_threshold_buy INTEGER NOT NULL DEFAULT 25,\n  fear_greed_threshold_sell INTEGER NOT NULL DEFAULT 75,\n  max_tranche_percentage TEXT NOT NULL DEFAULT '50.0',\n  min_tranche_percentage TEXT NOT NULL DEFAULT '10.0',\n  dca_interval_hours INTEGER NOT NULL DEFAULT 24,\n  target_zones TEXT,\n  stop_loss_percentage TEXT,\n  take_profit_percentage TEXT,\n  total_invested TEXT NOT NULL DEFAULT '0.0',\n  total_purchased TEXT NOT NULL DEFAULT '0.0',\n  average_buy_price TEXT,\n  last_execution_at TEXT,\n  next_execution_at TEXT,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m248.7µs [3melapsed_secs[0m[2m=[0m0.0002487
+[2m2025-09-25T16:32:16.483092Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: dca_strategies
+[2m2025-09-25T16:32:16.489490Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS dca_executions (\n  id TEXT PRIMARY KEY,\n  strategy_id TEXT NOT NULL,\n  exchange_connection_id TEXT NOT NULL,\n  execution_type TEXT NOT NULL,\n  trigger_reason TEXT NOT NULL,\n  amount_usd TEXT NOT NULL,\n  amount_asset TEXT,\n  price_at_execution TEXT,\n  fear_greed_index INTEGER,\n  market_volatility TEXT,\n  order_id TEXT,\n  order_status TEXT NOT NULL DEFAULT 'pending',\n  execution_timestamp TEXT NOT NULL,\n  error_message TEXT,\n  created_at TEXT NOT NULL,\n  FOREIGN KEY (strategy_id) REFERENCES dca_strategies (id) ON DELETE CASCADE,\n  FOREIGN KEY (exchange_connection_id) REFERENCES exchange_connections (id) ON DELETE CASCADE\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m209.4µs [3melapsed_secs[0m[2m=[0m0.0002094
+[2m2025-09-25T16:32:16.489837Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: dca_executions
+[2m2025-09-25T16:32:16.493824Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"CREATE TABLE IF NOT …" [3mdb.statement[0m[2m=[0m"\n\nCREATE TABLE IF NOT EXISTS market_data (\n  id TEXT PRIMARY KEY,\n  asset_symbol TEXT NOT NULL,\n  price TEXT NOT NULL,\n  volume_24h TEXT,\n  market_cap TEXT,\n  fear_greed_index INTEGER,\n  volatility_7d TEXT,\n  volatility_30d TEXT,\n  rsi_14 TEXT,\n  ema_20 TEXT,\n  ema_50 TEXT,\n  ema_200 TEXT,\n  support_level TEXT,\n  resistance_level TEXT,\n  trend_direction TEXT,\n  timestamp TEXT NOT NULL,\n  created_at TEXT NOT NULL\n);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m193µs [3melapsed_secs[0m[2m=[0m0.000193
+[2m2025-09-25T16:32:16.493986Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Created table: market_data
+[2m2025-09-25T16:32:16.494016Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Creating database indexes...
+[2m2025-09-25T16:32:16.500750Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"-- User-related indexes CREATE …" [3mdb.statement[0m[2m=[0m"\n\n-- User-related indexes\nCREATE INDEX IF NOT EXISTS idx_users_email ON users(email);\nCREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);\n-- Session-related indexes\nCREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);\nCREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);\nCREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);\n-- Exchange connection indexes\nCREATE INDEX IF NOT EXISTS idx_exchange_connections_user_id ON exchange_connections(user_id);\nCREATE INDEX IF NOT EXISTS idx_exchange_connections_exchange_name ON exchange_connections(exchange_name);\n-- Wallet balance indexes\nCREATE INDEX IF NOT EXISTS idx_wallet_balances_exchange_connection_id ON wallet_balances(exchange_connection_id);\nCREATE INDEX IF NOT EXISTS idx_wallet_balances_wallet_type ON wallet_balances(wallet_type);\nCREATE INDEX IF NOT EXISTS idx_wallet_balances_asset_symbol ON wallet_balances(asset_symbol);\n-- DCA strategy indexes\nCREATE INDEX IF NOT EXISTS idx_dca_strategies_user_id ON dca_strategies(user_id);\nCREATE INDEX IF NOT EXISTS idx_dca_strategies_status ON dca_strategies(status);\nCREATE INDEX IF NOT EXISTS idx_dca_strategies_asset_symbol ON dca_strategies(asset_symbol);\nCREATE INDEX IF NOT EXISTS idx_dca_strategies_next_execution ON dca_strategies(next_execution_at);\n-- DCA execution indexes\nCREATE INDEX IF NOT EXISTS idx_dca_executions_strategy_id ON dca_executions(strategy_id);\nCREATE INDEX IF NOT EXISTS idx_dca_executions_timestamp ON dca_executions(execution_timestamp);\n-- Market data indexes\nCREATE INDEX IF NOT EXISTS idx_market_data_symbol ON market_data(asset_symbol);\nCREATE INDEX IF NOT EXISTS idx_market_data_timestamp ON market_data(timestamp);\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m790.8µs [3melapsed_secs[0m[2m=[0m0.0007908
+[2m2025-09-25T16:32:16.500946Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Database indexes created successfully
+[2m2025-09-25T16:32:16.500966Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Running database migrations...
+[2m2025-09-25T16:32:16.501898Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT totp_secret FROM users …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  totp_secret\nFROM\n  users\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m232.4µs [3melapsed_secs[0m[2m=[0m0.0002324
+[2m2025-09-25T16:32:16.502650Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT totp_enabled FROM users …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  totp_enabled\nFROM\n  users\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m141.3µs [3melapsed_secs[0m[2m=[0m0.0001413
+[2m2025-09-25T16:32:16.503549Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"UPDATE users SET totp_enabled …" [3mdb.statement[0m[2m=[0m"\n\nUPDATE\n  users\nSET\n  totp_enabled = 0\nWHERE\n  totp_enabled IS NULL\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m181µs [3melapsed_secs[0m[2m=[0m0.000181
+[2m2025-09-25T16:32:16.504192Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT encrypted_passphrase FROM exchange_connections …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  encrypted_passphrase\nFROM\n  exchange_connections\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m185.1µs [3melapsed_secs[0m[2m=[0m0.0001851
+[2m2025-09-25T16:32:16.505004Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT passphrase_nonce FROM exchange_connections …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  passphrase_nonce\nFROM\n  exchange_connections\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m172.1µs [3melapsed_secs[0m[2m=[0m0.0001721
+[2m2025-09-25T16:32:16.506007Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT passphrase_salt FROM exchange_connections …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  passphrase_salt\nFROM\n  exchange_connections\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m164.2µs [3melapsed_secs[0m[2m=[0m0.0001642
+[2m2025-09-25T16:32:16.507062Z[0m [32m INFO[0m [2msqlx::query[0m[2m:[0m [3msummary[0m[2m=[0m"SELECT config_json FROM dca_strategies …" [3mdb.statement[0m[2m=[0m"\n\nSELECT\n  config_json\nFROM\n  dca_strategies\nLIMIT\n  1\n" [3mrows_affected[0m[2m=[0m0 [3mrows_returned[0m[2m=[0m0 [3melapsed[0m[2m=[0m179.9µs [3melapsed_secs[0m[2m=[0m0.0001799
+[2m2025-09-25T16:32:16.507250Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m config_json column already exists in dca_strategies table
+[2m2025-09-25T16:32:16.507287Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m ✓ Database migrations completed
+[2m2025-09-25T16:32:16.507303Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Database schema setup completed
+[2m2025-09-25T16:32:16.507316Z[0m [32m INFO[0m [2me_squared_backend::database[0m[2m:[0m Database connection established successfully
+[2m2025-09-25T16:32:16.507638Z[0m [32m INFO[0m [2me_squared_backend::strategies[0m[2m:[0m Initializing trading strategies...
+[2m2025-09-25T16:32:16.507665Z[0m [32m INFO[0m [2me_squared_backend::strategies::implementations::dca::registration[0m[2m:[0m Initializing DCA strategies...
+[2m2025-09-25T16:32:16.507716Z[0m [32m INFO[0m [2me_squared_backend::strategies::core::registry[0m[2m:[0m Registered strategy: dca_v2
+[2m2025-09-25T16:32:16.507757Z[0m [32m INFO[0m [2me_squared_backend::strategies::implementations::dca::registration[0m[2m:[0m DCA strategy registered successfully
+[2m2025-09-25T16:32:16.507777Z[0m [32m INFO[0m [2me_squared_backend::strategies::implementations::dca::registration[0m[2m:[0m All DCA strategies initialized successfully
+[2m2025-09-25T16:32:16.507792Z[0m [32m INFO[0m [2me_squared_backend::strategies[0m[2m:[0m All trading strategies initialized successfully
+[2m2025-09-25T16:32:16.507820Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m ✓ Application services initialized
+[2m2025-09-25T16:32:16.507835Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m Starting strategy execution engines...
+[2m2025-09-25T16:32:16.507858Z[0m [32m INFO[0m [2me_squared_backend[0m[2m:[0m ✓ Background services started
+Error: Failed to create HTTP server
+
+Caused by:
+    0: Failed to bind server to 127.0.0.1:8080
+    1: Only one usage of each socket address (protocol/network address/port) is normally permitted. (os error 10048)
+error: process didn't exit successfully: `target\debug\e_squared_backend.exe` (exit code: 1)

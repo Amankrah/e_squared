@@ -4,12 +4,13 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Qu
 use uuid::Uuid;
 use validator::Validate;
 use rust_decimal::Decimal;
+use tracing;
 
 use crate::models::dca_strategy::{
     Entity as DCAStrategyEntity,
     ActiveModel as DCAStrategyActiveModel,
     ExecutionEntity as DCAExecutionEntity,
-    CreateDCAStrategyRequest, UpdateDCAStrategyRequest,
+    CreateDCAStrategyRequest, UpdateDCAStrategyRequest, CreateFromPresetRequest,
     DCAStrategyResponse, DCAStrategiesResponse, DCAExecutionResponse,
     DCAStatus,
 };
@@ -123,6 +124,18 @@ pub async fn get_dca_strategies(
         .await
         .map_err(AppError::DatabaseError)?;
 
+    // For new users with no strategies, return empty response immediately
+    if strategies.is_empty() {
+        let response = DCAStrategiesResponse {
+            strategies: vec![],
+            total_allocation: Decimal::ZERO,
+            total_invested: Decimal::ZERO,
+            total_profit_loss: Decimal::ZERO,
+            active_strategies: 0,
+        };
+        return Ok(HttpResponse::Ok().json(response));
+    }
+
     let mut strategy_responses = Vec::new();
     let mut total_allocation = Decimal::ZERO;
     let mut total_invested = Decimal::ZERO;
@@ -156,8 +169,9 @@ pub async fn get_dca_strategies(
             })
             .collect();
 
-        // Calculate current P&L if we have positions
+        // Calculate current P&L if we have positions - with graceful error handling
         let (current_profit_loss, profit_loss_percentage) = if strategy.total_purchased > Decimal::ZERO {
+            // Try to get current price, but don't fail the entire request if market data is unavailable
             match market_service.get_current_price(&strategy.asset_symbol).await {
                 Ok(current_price) => {
                     if let Some(avg_price) = strategy.average_buy_price {
@@ -174,7 +188,11 @@ pub async fn get_dca_strategies(
                         (None, None)
                     }
                 }
-                Err(_) => (None, None),
+                Err(e) => {
+                    // Log the error but don't fail the request - market data might be temporarily unavailable
+                    tracing::warn!("Failed to get current price for {}: {:?}", strategy.asset_symbol, e);
+                    (None, None)
+                }
             }
         } else {
             (None, None)
@@ -497,4 +515,169 @@ pub async fn get_execution_stats(
     let stats = execution_engine.get_execution_stats().await;
 
     Ok(HttpResponse::Ok().json(stats))
+}
+
+/// Get available DCA strategy presets
+pub async fn get_dca_presets(
+    req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    // Verify authentication
+    req.extensions()
+        .get::<Uuid>()
+        .copied()
+        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+
+    use crate::strategies::implementations::dca::presets::DCAPresets;
+    use serde_json::json;
+
+    let presets = DCAPresets::get_all_presets()
+        .into_iter()
+        .map(|(name, description, _)| {
+            json!({
+                "id": name,
+                "name": name.replace("_", " ").split_whitespace()
+                    .map(|word| {
+                        let mut chars = word.chars();
+                        match chars.next() {
+                            None => String::new(),
+                            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                "description": description,
+                "category": "DCA",
+                "risk_level": match name {
+                    "conservative" | "weekend_warrior" | "business_hours" => "Low",
+                    "balanced_dynamic" | "volatility_hunter" | "micro_dca" => "Medium", 
+                    "aggressive_rsi" | "dip_buyer" | "bear_market_hunter" => "High",
+                    _ => "Medium"
+                },
+                "complexity": match name {
+                    "conservative" | "weekend_warrior" | "business_hours" => "Beginner",
+                    "dip_buyer" | "volatility_hunter" | "micro_dca" => "Intermediate",
+                    "aggressive_rsi" | "balanced_dynamic" | "bear_market_hunter" => "Advanced",
+                    _ => "Intermediate"
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    // Add risk-managed preset separately since it takes additional parameters
+    let (risk_name, risk_desc, _) = DCAPresets::get_risk_managed_preset();
+    let mut all_presets = presets;
+    all_presets.push(json!({
+        "id": risk_name,
+        "name": "Risk Managed",
+        "description": risk_desc,
+        "category": "DCA",
+        "risk_level": "Low",
+        "complexity": "Advanced",
+        "requires_params": true
+    }));
+
+    Ok(HttpResponse::Ok().json(json!({
+        "presets": all_presets,
+        "total_count": all_presets.len()
+    })))
+}
+
+/// Create a DCA strategy from a preset
+pub async fn create_dca_strategy_from_preset(
+    db: web::Data<DatabaseConnection>,
+    req: HttpRequest,
+    body: web::Json<CreateFromPresetRequest>,
+) -> Result<HttpResponse, AppError> {
+    // Get user ID from request extensions
+    let user_id = req.extensions()
+        .get::<Uuid>()
+        .copied()
+        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+
+    // Validate request
+    body.validate().map_err(AppError::ValidationError)?;
+
+    use crate::strategies::implementations::dca::presets::DCAPresets;
+
+    // Generate config from preset
+    let config = match body.preset_id.as_str() {
+        "conservative" => DCAPresets::conservative(body.base_amount),
+        "aggressive_rsi" => DCAPresets::aggressive_rsi(body.base_amount),
+        "volatility_hunter" => DCAPresets::volatility_hunter(body.base_amount),
+        "dip_buyer" => DCAPresets::dip_buyer(body.base_amount),
+        "balanced_dynamic" => DCAPresets::balanced_dynamic(body.base_amount),
+        "weekend_warrior" => DCAPresets::weekend_warrior(body.base_amount),
+        "business_hours" => DCAPresets::business_hours(body.base_amount),
+        "bear_market_hunter" => DCAPresets::bear_market_hunter(body.base_amount),
+        "micro_dca" => DCAPresets::micro_dca(body.base_amount),
+        "risk_managed" => {
+            let max_position = body.max_position_size
+                .ok_or_else(|| AppError::BadRequest("max_position_size required for risk_managed preset".to_string()))?;
+            DCAPresets::risk_managed(body.base_amount, max_position)
+        },
+        _ => return Err(AppError::BadRequest("Invalid preset_id".to_string())),
+    };
+
+    // Check if user already has a strategy with this name
+    let existing_strategy = DCAStrategyEntity::find()
+        .filter(crate::models::dca_strategy::Column::UserId.eq(user_id))
+        .filter(crate::models::dca_strategy::Column::Name.eq(&body.name))
+        .one(db.get_ref())
+        .await
+        .map_err(AppError::DatabaseError)?;
+
+    if existing_strategy.is_some() {
+        return Err(AppError::BadRequest("Strategy with this name already exists".to_string()));
+    }
+
+    // Validate generated config
+    config.validate().map_err(|e| AppError::BadRequest(format!("Preset generated invalid config: {}", e)))?;
+
+    // Calculate next execution time based on frequency
+    use crate::strategies::implementations::dca::DCAFrequency;
+    let next_execution_at = match config.frequency {
+        DCAFrequency::Hourly(hours) => Utc::now() + chrono::Duration::hours(hours as i64),
+        DCAFrequency::Daily(days) => Utc::now() + chrono::Duration::days(days as i64),
+        DCAFrequency::Weekly(weeks) => Utc::now() + chrono::Duration::weeks(weeks as i64),
+        DCAFrequency::Monthly(months) => Utc::now() + chrono::Duration::days((months * 30) as i64),
+        DCAFrequency::Custom(minutes) => Utc::now() + chrono::Duration::minutes(minutes as i64),
+    };
+
+    // Serialize config to JSON
+    let config_json = serde_json::to_string(&config)
+        .map_err(|e| AppError::BadRequest(format!("Failed to serialize config: {}", e)))?;
+
+    // Create the strategy
+    let new_strategy = DCAStrategyActiveModel {
+        id: Set(Uuid::new_v4()),
+        user_id: Set(user_id),
+        name: Set(body.name.clone()),
+        asset_symbol: Set(body.symbol.clone()),
+        status: Set("active".to_string()),
+        config_json: Set(config_json),
+        total_invested: Set(Decimal::ZERO),
+        total_purchased: Set(Decimal::ZERO),
+        average_buy_price: Set(None),
+        last_execution_at: Set(None),
+        next_execution_at: Set(Some(next_execution_at)),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+    };
+
+    let strategy = new_strategy.insert(db.get_ref())
+        .await
+        .map_err(AppError::DatabaseError)?;
+
+    Ok(HttpResponse::Created().json(serde_json::json!({
+        "message": "DCA strategy created successfully from preset",
+        "strategy": {
+            "id": strategy.id,
+            "name": strategy.name,
+            "asset_symbol": strategy.asset_symbol,
+            "status": strategy.status,
+            "preset_id": body.preset_id,
+            "base_amount": body.base_amount,
+            "created_at": strategy.created_at,
+        }
+    })))
 }

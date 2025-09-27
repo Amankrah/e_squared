@@ -14,7 +14,9 @@ import {
   Zap,
   Target,
   Cog,
-  Home
+  Home,
+  LineChart,
+  TestTube
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -48,13 +50,22 @@ export function DashboardSidebar({ isOpen, onClose }: DashboardSidebarProps) {
       iconColor: "text-purple-300"
     },
     {
-      href: "/dashboard/strategies",
+      href: "/dashboard/strategies/unified",
       icon: Target,
-      label: "Strategies",
-      description: "Build & manage",
+      label: "Trading Strategies",
+      description: "All strategy types",
       color: "hover:bg-gradient-to-r hover:from-purple-500/20 hover:to-violet-500/20",
       activeColor: "bg-gradient-to-r from-purple-600/90 to-violet-600/90",
       iconColor: "text-purple-300"
+    },
+    {
+      href: "/dashboard/backtesting",
+      icon: TestTube,
+      label: "Backtesting Lab",
+      description: "Test strategies",
+      color: "hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20",
+      activeColor: "bg-gradient-to-r from-cyan-600/90 to-blue-600/90",
+      iconColor: "text-cyan-300"
     },
     {
       href: "/dashboard/exchanges",
@@ -66,13 +77,22 @@ export function DashboardSidebar({ isOpen, onClose }: DashboardSidebarProps) {
       iconColor: "text-blue-300"
     },
     {
-      href: "/dashboard/trades",
-      icon: Zap,
-      label: "Active Trades",
-      description: "Monitor positions",
+      href: "/dashboard/portfolio",
+      icon: LineChart,
+      label: "Portfolio Analytics",
+      description: "Performance insights",
       color: "hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20",
       activeColor: "bg-gradient-to-r from-emerald-600/90 to-teal-600/90",
       iconColor: "text-emerald-300"
+    },
+    {
+      href: "/dashboard/trades",
+      icon: Activity,
+      label: "Live Executions",
+      description: "Active positions",
+      color: "hover:bg-gradient-to-r hover:from-orange-500/20 hover:to-red-500/20",
+      activeColor: "bg-gradient-to-r from-orange-600/90 to-red-600/90",
+      iconColor: "text-orange-300"
     },
     {
       href: "/dashboard/settings",

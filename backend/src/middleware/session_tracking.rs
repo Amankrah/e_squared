@@ -9,6 +9,7 @@ use std::{
     rc::Rc,
 };
 use uuid::Uuid;
+use tracing::{warn, error};
 
 use crate::utils::session_tracker::SessionTracker;
 
@@ -53,6 +54,15 @@ where
         let service = Rc::clone(&self.service);
 
         Box::pin(async move {
+            let request_path = req.path().to_string();
+            let _request_method = req.method().as_str().to_string();
+
+            // Security: Block suspicious requests
+            if request_path.contains("..") || request_path.contains("//") {
+                warn!("Suspicious path traversal attempt: {}", request_path);
+                return Err(actix_web::error::ErrorBadRequest("Invalid request path").into());
+            }
+
             // Check if user is authenticated (user_id is set by auth middleware)
             if let Some(user_id) = req.extensions().get::<Uuid>().copied() {
                 // Get database connection from app data
@@ -65,11 +75,19 @@ where
                     let ip_address = SessionTracker::extract_ip_address_static(request);
                     let user_agent = SessionTracker::extract_user_agent_static(request);
 
+                    // Security: Validate user agent
+                    if user_agent.is_empty() || user_agent.len() > 500 {
+                        warn!("Suspicious user agent for user {}: {}", user_id, user_agent);
+                    }
+
+                    // Track session in background without blocking request
                     tokio::spawn(async move {
                         if let Err(e) = SessionTracker::track_session_with_data(&db_clone, user_id, ip_address, user_agent).await {
-                            eprintln!("Failed to track session: {:?}", e);
+                            error!("Failed to track session for user {}: {:?}", user_id, e);
                         }
                     });
+                } else {
+                    error!("Database connection not available for session tracking");
                 }
             }
 

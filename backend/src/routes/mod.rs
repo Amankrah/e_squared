@@ -1,16 +1,13 @@
 pub mod backtesting;
 
 use actix_web::{web, HttpResponse};
-use std::env;
 use serde_json::json;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
     dca_strategy_management, rsi_strategy_management, macd_strategy_management,
     sma_crossover_strategy_management, grid_trading_strategy_management,
-    AuthService
 };
-use crate::middleware::AuthMiddleware;
 
 /// Configure all application routes
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
@@ -26,7 +23,6 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_macd_routes)
             .configure(configure_sma_crossover_routes)
             .configure(configure_grid_trading_routes)
-            .configure(configure_strategy_template_routes)
             .configure(configure_exchange_connector_routes)
             .configure(configure_backtesting_routes)
             .configure(configure_public_routes)
@@ -77,9 +73,6 @@ async fn health_check() -> HttpResponse {
 
 /// Configure authentication routes
 fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/auth")
             .route("/signup", web::post().to(auth::signup))
@@ -89,7 +82,6 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
             .route("/me", web::get().to(auth::get_current_user_optional))
             .service(
                 web::scope("")
-                    .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
                     .route("/profile", web::get().to(auth::get_current_user))
                     .route("/change-password", web::post().to(auth::change_password))
             )
@@ -98,12 +90,8 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure user profile routes
 fn configure_profile_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/profile")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("", web::post().to(user_profile::create_profile))
             .route("", web::get().to(user_profile::get_profile))
             .route("", web::put().to(user_profile::update_profile))
@@ -121,12 +109,8 @@ fn configure_public_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure two-factor authentication routes
 fn configure_2fa_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/2fa")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/setup", web::post().to(two_factor::setup_2fa))
             .route("/verify-setup", web::post().to(two_factor::verify_2fa_setup))
             .route("/verify", web::post().to(two_factor::verify_2fa))
@@ -137,12 +121,8 @@ fn configure_2fa_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure session management routes
 fn configure_session_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/sessions")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("", web::get().to(session_management::get_active_sessions))
             .route("/{session_id}", web::delete().to(session_management::revoke_session))
             .route("/revoke-all", web::post().to(session_management::revoke_all_sessions))
@@ -151,12 +131,8 @@ fn configure_session_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure exchange connection routes
 fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/exchanges")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/connections", web::post().to(exchange_management::create_exchange_connection))
             .route("/connections", web::get().to(exchange_management::get_exchange_connections))
             .route("/connections/{connection_id}", web::put().to(exchange_management::update_exchange_connection))
@@ -169,30 +145,24 @@ fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure DCA strategy routes
 fn configure_dca_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/dca")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/strategies", web::post().to(dca_strategy_management::create_dca_strategy))
             .route("/strategies", web::get().to(dca_strategy_management::get_dca_strategies))
+            .route("/strategies/from-preset", web::post().to(dca_strategy_management::create_dca_strategy_from_preset))
             .route("/strategies/{strategy_id}", web::get().to(dca_strategy_management::get_dca_strategy))
             .route("/strategies/{strategy_id}", web::put().to(dca_strategy_management::update_dca_strategy))
             .route("/strategies/{strategy_id}", web::delete().to(dca_strategy_management::delete_dca_strategy))
             .route("/strategies/{strategy_id}/execute", web::post().to(dca_strategy_management::execute_dca_strategy))
             .route("/execution-stats", web::get().to(dca_strategy_management::get_execution_stats))
+            .route("/presets", web::get().to(dca_strategy_management::get_dca_presets))
     );
 }
 
 /// Configure RSI strategy routes
 fn configure_rsi_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/rsi")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/strategies", web::post().to(rsi_strategy_management::create_rsi_strategy))
             .route("/strategies", web::get().to(rsi_strategy_management::get_rsi_strategies))
             .route("/strategies/{strategy_id}", web::get().to(rsi_strategy_management::get_rsi_strategy))
@@ -204,12 +174,8 @@ fn configure_rsi_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure MACD strategy routes
 fn configure_macd_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/macd")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/strategies", web::post().to(macd_strategy_management::create_macd_strategy))
             .route("/strategies", web::get().to(macd_strategy_management::get_macd_strategies))
             .route("/strategies/{strategy_id}", web::get().to(macd_strategy_management::get_macd_strategy))
@@ -219,20 +185,6 @@ fn configure_macd_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
-/// Configure strategy template routes
-fn configure_strategy_template_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
-    // Legacy strategy templates routes removed - using new modular strategy system
-    // cfg.service(
-    //     web::scope("/strategy-templates")
-    //         .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
-    //         .route("", web::get().to(strategy_templates_handler::get_strategy_templates))
-    //         .route("/{template_id}/backtest", web::post().to(strategy_templates_handler::run_template_backtest))
-    //         .route("/{template_id}", web::get().to(strategy_templates_handler::get_strategy_template))
-    // );
-}
 
 /// Configure exchange connector routes
 fn configure_exchange_connector_routes(cfg: &mut web::ServiceConfig) {
@@ -248,12 +200,8 @@ fn configure_exchange_connector_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure SMA Crossover strategy routes
 fn configure_sma_crossover_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/sma-crossover")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/strategies", web::post().to(sma_crossover_strategy_management::create_sma_crossover_strategy))
             .route("/strategies", web::get().to(sma_crossover_strategy_management::get_user_sma_crossover_strategies))
             .route("/strategies/{strategy_id}", web::get().to(sma_crossover_strategy_management::get_sma_crossover_strategy))
@@ -266,12 +214,8 @@ fn configure_sma_crossover_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure Grid Trading strategy routes
 fn configure_grid_trading_routes(cfg: &mut web::ServiceConfig) {
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("JWT_SECRET environment variable is required");
-
     cfg.service(
         web::scope("/grid-trading")
-            .wrap(AuthMiddleware::new(AuthService::new(jwt_secret)))
             .route("/strategies", web::post().to(grid_trading_strategy_management::create_grid_trading_strategy))
             .route("/strategies", web::get().to(grid_trading_strategy_management::get_grid_trading_strategies))
             .route("/strategies/{strategy_id}", web::get().to(grid_trading_strategy_management::get_grid_trading_strategy))

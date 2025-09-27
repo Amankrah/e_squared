@@ -558,6 +558,15 @@ impl ExecutionEngine {
                 warn!("Risk limit exceeded for instance {}, pausing", instance_id);
                 let _ = self.pause_strategy_instance(instance_id).await;
             }
+            ExecutionEvent::OrderFilled { instance_id, order_id, symbol, filled_quantity, execution_price, timestamp } => {
+                info!("Order filled for instance {}: {} {} at {} (Order ID: {})", 
+                      instance_id, filled_quantity, symbol, execution_price, order_id);
+                
+                // Notify strategy of order fill
+                if let Err(e) = self.notify_strategy_order_fill(instance_id, order_id, symbol, filled_quantity, execution_price, timestamp).await {
+                    error!("Failed to notify strategy {} of order fill: {}", instance_id, e);
+                }
+            }
             _ => {
                 // Log other events
                 debug!("Processed execution event: {:?}", event);
@@ -594,6 +603,45 @@ impl ExecutionEngine {
             .current_time(Utc::now())
             .available_balance(rust_decimal::Decimal::from(10000)) // Mock balance
             .build()
+    }
+
+    /// Notify strategy of order fill for proper state tracking
+    async fn notify_strategy_order_fill(
+        &self, 
+        instance_id: Uuid, 
+        order_id: String, 
+        symbol: String,
+        filled_quantity: rust_decimal::Decimal,
+        execution_price: rust_decimal::Decimal,
+        timestamp: DateTime<Utc>
+    ) -> Result<(), AppError> {
+        // Get the strategy instance
+        if let Some(strategy_arc) = {
+            let instances = self.instances.read().await;
+            instances.get(&instance_id).cloned()
+        } {
+            let mut strategy = strategy_arc.lock().await;
+            
+            // Create order update event
+            let order_update = crate::strategies::core::OrderUpdate {
+                order_id,
+                symbol: symbol.clone(),
+                order_type: crate::strategies::core::traits::OrderType::Market,
+                status: crate::strategies::core::traits::OrderStatus::Filled,
+                quantity: filled_quantity,
+                price: Some(execution_price),
+                filled_quantity,
+                timestamp,
+            };
+            
+            // Call the strategy's order update handler
+            strategy.on_order_update(&order_update).await?;
+            
+            info!("Notified strategy {} of order fill: {} {} at {}", 
+                  instance_id, filled_quantity, symbol, execution_price);
+        }
+        
+        Ok(())
     }
 }
 

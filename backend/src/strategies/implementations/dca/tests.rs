@@ -7,12 +7,12 @@ mod tests {
         ControllableStrategy
     };
     use crate::strategies::implementations::dca::{
-        DCAStrategy, DCAConfig, DCAFrequency, RSIConfig, VolatilityConfig,
-        DipBuyingLevel, DCAPresets
+        DCAStrategy, DCAConfig, DCAFrequency, RSIConfig, 
+        DipBuyingLevel, presets::DCAPresets
     };
     use crate::exchange_connectors::Kline;
     use chrono::{Utc, Duration};
-    use rust_decimal::{Decimal, prelude::FromPrimitive};
+    use rust_decimal::Decimal;
     use uuid::Uuid;
 
     /// Helper function to create test kline data

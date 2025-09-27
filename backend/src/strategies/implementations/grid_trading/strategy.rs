@@ -553,8 +553,21 @@ impl GridTradingStrategy {
 
         // Check maximum time in position
         if let Some(max_hours) = config.risk_settings.max_time_in_position {
-            // This would require tracking when positions were opened
-            // For now, we'll skip this check
+            if self.state.inventory != Decimal::ZERO {
+                // Find the oldest position (earliest fill time)
+                let oldest_fill = self.state.grid_levels
+                    .iter()
+                    .filter(|level| level.fill_count > 0)
+                    .filter_map(|level| level.last_fill_time)
+                    .min();
+                
+                if let Some(oldest_time) = oldest_fill {
+                    let position_age = context.current_time.signed_duration_since(oldest_time);
+                    if position_age >= Duration::hours(max_hours as i64) {
+                        return Some(format!("Maximum time in position exceeded: {} hours", position_age.num_hours()));
+                    }
+                }
+            }
         }
 
         None
@@ -633,7 +646,7 @@ impl Strategy for GridTradingStrategy {
             return Ok(None);
         }
 
-        let config = self.config.as_ref()
+        let _config = self.config.as_ref()
             .ok_or_else(|| AppError::BadRequest("Strategy not initialized".to_string()))?;
 
         // Update unrealized PnL

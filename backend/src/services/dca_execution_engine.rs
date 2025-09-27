@@ -657,7 +657,7 @@ impl DCAExecutionEngine {
     }
 
     /// Get historical kline data for strategy framework
-    async fn get_historical_data_for_asset(&self, symbol: &str) -> Result<Vec<crate::exchange_connectors::Kline>, AppError> {
+    async fn get_historical_data_for_asset(&self, _symbol: &str) -> Result<Vec<crate::exchange_connectors::Kline>, AppError> {
         // For now, return empty vec. In production, this would fetch real historical data
         // from the market data service or database
         Ok(vec![])

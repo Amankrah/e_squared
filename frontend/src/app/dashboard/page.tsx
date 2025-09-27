@@ -19,13 +19,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { ConnectExchangePrompt } from "@/components/dashboard/connect-exchange-prompt"
-import { apiClient, DCAStrategy, ExchangeConnection } from "@/lib/api"
+import { MultiStrategyOverview } from "@/components/dashboard/multi-strategy-overview"
+import { StrategyTypeStats } from "@/components/dashboard/strategy-type-stats"
+import { QuickActionsPanel } from "@/components/dashboard/quick-actions-panel"
+import { apiClient, DCAStrategy, ExchangeConnection, Strategy, StrategyType } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import Link from "next/link"
 
 export default function Dashboard() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [strategies, setStrategies] = useState<DCAStrategy[]>([])
+  const [allStrategies, setAllStrategies] = useState<{
+    dca: Strategy[]
+    gridTrading: Strategy[]
+    smaCrossover: Strategy[]
+    rsi: Strategy[]
+    macd: Strategy[]
+  }>({
+    dca: [],
+    gridTrading: [],
+    smaCrossover: [],
+    rsi: [],
+    macd: []
+  })
   const [connections, setConnections] = useState<ExchangeConnection[]>([])
   const [liveBalances, setLiveBalances] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -34,7 +50,15 @@ export default function Dashboard() {
     total_allocation: "0",
     total_invested: "0",
     total_profit_loss: "0",
-    active_strategies: 0
+    active_strategies: 0,
+    total_strategies: 0,
+    strategy_breakdown: {
+      dca: 0,
+      grid_trading: 0,
+      sma_crossover: 0,
+      rsi: 0,
+      macd: 0
+    }
   })
 
   // SECURE: Only load dashboard data when authenticated
@@ -59,19 +83,55 @@ export default function Dashboard() {
 
     try {
       setLoading(true)
-      const [strategiesRes, connectionsRes] = await Promise.all([
-        apiClient.getDCAStrategies().catch(() => ({ strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 })),
+      const [allStrategiesRes, connectionsRes] = await Promise.all([
+        apiClient.getAllStrategies().catch(() => ({
+          dca: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
+          gridTrading: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
+          smaCrossover: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
+          rsi: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
+          macd: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 }
+        })),
         apiClient.getExchangeConnections().catch(() => ({ connections: [], message: '' }))
       ])
 
-      setStrategies(strategiesRes.strategies || [])
-      setConnections(connectionsRes.connections || [])
-      setSummary({
-        total_allocation: strategiesRes.total_allocation,
-        total_invested: strategiesRes.total_invested,
-        total_profit_loss: strategiesRes.total_profit_loss,
-        active_strategies: strategiesRes.active_strategies
+      // Set individual strategy collections
+      setAllStrategies({
+        dca: allStrategiesRes.dca.strategies || [],
+        gridTrading: allStrategiesRes.gridTrading.strategies || [],
+        smaCrossover: allStrategiesRes.smaCrossover.strategies || [],
+        rsi: allStrategiesRes.rsi.strategies || [],
+        macd: allStrategiesRes.macd.strategies || []
       })
+      
+      // Keep DCA strategies for backward compatibility
+      setStrategies(allStrategiesRes.dca.strategies || [])
+      setConnections(connectionsRes.connections || [])
+      
+      // Calculate combined summary statistics
+      const allResults = [
+        allStrategiesRes.dca,
+        allStrategiesRes.gridTrading,
+        allStrategiesRes.smaCrossover,
+        allStrategiesRes.rsi,
+        allStrategiesRes.macd
+      ]
+      
+      const combinedSummary = {
+        total_allocation: allResults.reduce((sum, res) => sum + parseFloat(res.total_allocation || '0'), 0).toString(),
+        total_invested: allResults.reduce((sum, res) => sum + parseFloat(res.total_invested || '0'), 0).toString(),
+        total_profit_loss: allResults.reduce((sum, res) => sum + parseFloat(res.total_profit_loss || '0'), 0).toString(),
+        active_strategies: allResults.reduce((sum, res) => sum + (res.active_strategies || 0), 0),
+        total_strategies: allResults.reduce((sum, res) => sum + (res.strategies?.length || 0), 0),
+        strategy_breakdown: {
+          dca: allStrategiesRes.dca.strategies?.length || 0,
+          grid_trading: allStrategiesRes.gridTrading.strategies?.length || 0,
+          sma_crossover: allStrategiesRes.smaCrossover.strategies?.length || 0,
+          rsi: allStrategiesRes.rsi.strategies?.length || 0,
+          macd: allStrategiesRes.macd.strategies?.length || 0
+        }
+      }
+      
+      setSummary(combinedSummary)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {
@@ -215,8 +275,23 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      {/* Overview Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="space-y-8">
+        {/* Enhanced Multi-Strategy Overview */}
+        <MultiStrategyOverview />
+
+        {/* Strategy Type Breakdown */}
+        <StrategyTypeStats 
+          strategies={allStrategies}
+        />
+
+        {/* Quick Actions Panel */}
+        <QuickActionsPanel 
+          hasStrategies={summary.total_strategies > 0}
+          hasExchangeConnections={connections.length > 0}
+        />
+
+        {/* Original Portfolio Stats Cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-200">
@@ -265,7 +340,7 @@ export default function Dashboard() {
               {loading ? '...' : summary.active_strategies}
             </div>
             <p className="text-xs text-gray-400">
-              {strategies.filter(s => parseFloat(s.current_profit_loss || '0') > 0).length} profitable, {strategies.filter(s => s.status === 'paused').length} paused
+              {summary.total_strategies} total strategies across all types
             </p>
           </CardContent>
         </Card>
@@ -284,7 +359,7 @@ export default function Dashboard() {
               {loading ? '...' : formatCurrency(summary.total_profit_loss)}
             </div>
             <p className="text-xs text-gray-400">
-              From DCA strategies
+              From all strategy types
             </p>
           </CardContent>
         </Card>
@@ -378,10 +453,10 @@ export default function Dashboard() {
               <div>
                 <CardTitle className="text-xl font-bold text-white">Active Strategies</CardTitle>
                 <CardDescription className="text-gray-300">
-                  Monitor your live DCA strategies
+                  Monitor your live trading strategies
                 </CardDescription>
               </div>
-              <Link href="/dashboard/strategies">
+              <Link href="/dashboard/strategies/unified">
                 <Button variant="outline" size="sm" className="border-[rgba(16,185,129,0.3)] bg-gradient-to-r from-[rgba(16,185,129,0.1)] to-[rgba(16,185,129,0.02)] text-emerald-200 hover:bg-[rgba(16,185,129,0.2)] backdrop-blur-sm">
                   View All
                   <ArrowRight className="ml-1 h-3 w-3" />
@@ -502,6 +577,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </Link>
+      </div>
       </div>
     </DashboardLayout>
   )

@@ -15,6 +15,7 @@ pub enum AppError {
     PasswordVerificationError,
     TokenCreation,
     InvalidToken,
+    TokenExpired,
     MissingToken,
     ProfileNotFound,
     InternalServerError,
@@ -42,7 +43,8 @@ impl fmt::Display for AppError {
             AppError::PasswordHashError => write!(f, "Failed to hash password"),
             AppError::PasswordVerificationError => write!(f, "Failed to verify password"),
             AppError::TokenCreation => write!(f, "Failed to create token"),
-            AppError::InvalidToken => write!(f, "Invalid or expired token"),
+            AppError::InvalidToken => write!(f, "Invalid token"),
+            AppError::TokenExpired => write!(f, "Token has expired"),
             AppError::MissingToken => write!(f, "Missing authentication token"),
             AppError::ProfileNotFound => write!(f, "Profile not found"),
             AppError::InternalServerError => write!(f, "Internal server error"),
@@ -124,7 +126,13 @@ impl ResponseError for AppError {
             AppError::InvalidToken => {
                 HttpResponse::Unauthorized().json(serde_json::json!({
                     "error": "Invalid token",
-                    "message": "The provided token is invalid or expired"
+                    "message": "The provided token is invalid"
+                }))
+            }
+            AppError::TokenExpired => {
+                HttpResponse::Unauthorized().json(serde_json::json!({
+                    "error": "Token expired",
+                    "message": "Your session has expired. Please login again."
                 }))
             }
             AppError::MissingToken => {

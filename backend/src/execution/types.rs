@@ -225,6 +225,15 @@ pub enum ExecutionEvent {
         instance_id: Uuid,
         position: Position,
     },
+    /// Order filled notification
+    OrderFilled {
+        instance_id: Uuid,
+        order_id: String,
+        symbol: String,
+        filled_quantity: Decimal,
+        execution_price: Decimal,
+        timestamp: DateTime<Utc>,
+    },
     /// Risk limit exceeded
     RiskLimitExceeded {
         instance_id: Uuid,

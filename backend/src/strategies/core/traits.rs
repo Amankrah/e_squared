@@ -186,7 +186,7 @@ pub struct OrderUpdate {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderType {
     Market,
     Limit,
@@ -195,7 +195,7 @@ pub enum OrderType {
     StopLimit,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderStatus {
     Pending,
     PartiallyFilled,

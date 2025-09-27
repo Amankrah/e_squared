@@ -2,7 +2,7 @@ mod strategy;
 mod config;
 mod types;
 mod factory;
-mod presets;
+pub mod presets;
 mod registration;
 
 #[cfg(test)]

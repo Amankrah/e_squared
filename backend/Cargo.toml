@@ -46,6 +46,7 @@ dotenv = "0.15"
 
 # Validation
 validator = { version = "0.18", features = ["derive"] }
+regex = "1.10"
 
 # Error handling
 anyhow = "1.0"

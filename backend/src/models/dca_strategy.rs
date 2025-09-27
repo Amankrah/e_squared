@@ -159,6 +159,25 @@ pub struct UpdateDCAStrategyRequest {
     pub config: Option<DCAConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct CreateFromPresetRequest {
+    #[validate(length(min = 1, max = 100))]
+    pub name: String,
+
+    #[validate(length(min = 1, max = 20))]
+    pub symbol: String,
+
+    #[validate(length(min = 1, max = 50))]
+    pub preset_id: String,
+
+    pub base_amount: Decimal,
+
+    // Optional parameters
+    pub max_position_size: Option<Decimal>, // Required for risk_managed preset
+    pub is_active: Option<bool>,
+    pub is_paper_trading: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct DCAStrategyResponse {
     pub id: Uuid,
@@ -316,11 +335,35 @@ impl Model {
 
     /// Calculate current tranche size using the strategy framework
     pub async fn calculate_current_tranche_size(&self, historical_data: Vec<crate::exchange_connectors::Kline>) -> Result<Decimal, String> {
-        let strategy = self.to_strategy_framework(historical_data).await?;
+        let mut strategy = self.to_strategy_framework(historical_data.clone()).await?;
 
-        // Use the strategy framework to determine amount
-        let config = self.get_dca_config()?;
-        Ok(config.base_amount) // Simple implementation - strategy framework handles complexity
+        use crate::strategies::core::{StrategyContextBuilder, StrategyMode, Strategy};
+        use rust_decimal::prelude::FromPrimitive;
+
+        let context = StrategyContextBuilder::new()
+            .strategy_id(self.id)
+            .user_id(self.user_id)
+            .symbol(self.asset_symbol.clone())
+            .interval("1h".to_string())
+            .mode(StrategyMode::Live)
+            .historical_data(historical_data)
+            .current_price(Decimal::from_f64(50000.0).unwrap_or(Decimal::ZERO))
+            .available_balance(self.get_dca_config()?.base_amount)
+            .build()
+            .map_err(|e| format!("Failed to build context: {:?}", e))?;
+
+        // Use strategy framework to calculate dynamic amount
+        match strategy.analyze(&context).await {
+            Ok(Some(signal)) => {
+                if let crate::strategies::core::QuantityType::DollarAmount(amount) = signal.action.quantity {
+                    Ok(amount)
+                } else {
+                    Ok(self.get_dca_config()?.base_amount) // Fallback to base amount
+                }
+            },
+            Ok(None) => Ok(Decimal::ZERO), // No signal means no execution
+            Err(_) => Ok(self.get_dca_config()?.base_amount), // Fallback to base amount on error
+        }
     }
 
     /// Check if strategy should execute using strategy framework

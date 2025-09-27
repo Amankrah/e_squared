@@ -255,7 +255,12 @@ pub async fn get_exchange_connections(
         .map(ExchangeConnectionResponse::from)
         .collect();
 
-    Ok(HttpResponse::Ok().json(responses))
+    // Return connections in the format expected by frontend (with connections wrapper)
+    let response = serde_json::json!({
+        "connections": responses
+    });
+    
+    Ok(HttpResponse::Ok().json(response))
 }
 
 /// Update an exchange connection

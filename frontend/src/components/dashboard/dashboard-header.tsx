@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Menu, Bell, User, Search, Settings, Palette } from "lucide-react"
+import { Menu, Bell, User, Search, Settings, Palette, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { ProgrammableLogo } from "@/components/programmable-logo"
+import { useAuth } from "@/contexts/auth-context"
 
 interface DashboardHeaderProps {
   onMenuToggle: () => void
@@ -13,9 +14,18 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
   const router = useRouter()
+  const { logout, user } = useAuth()
 
   const handleLogoClick = () => {
     router.push('/')
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('Logout failed:', error)
+    }
   }
 
   return (
@@ -98,7 +108,20 @@ export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
             <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
               <User className="h-4 w-4 text-white" />
             </div>
-            <span className="hidden sm:block text-sm font-medium">Profile</span>
+            <span className="hidden sm:block text-sm font-medium">
+              {user?.email?.split('@')[0] || 'Profile'}
+            </span>
+          </Button>
+
+          {/* Logout Button */}
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className="flex items-center space-x-2 text-gray-200 hover:bg-gradient-to-r hover:from-red-500/20 hover:to-pink-500/20 hover:text-white hover:scale-105 transition-all duration-300 rounded-xl px-3 py-2"
+            title="Logout"
+          >
+            <LogOut className="h-5 w-5" />
+            <span className="hidden sm:block text-sm font-medium">Logout</span>
           </Button>
         </div>
       </div>

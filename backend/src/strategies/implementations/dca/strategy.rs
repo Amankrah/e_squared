@@ -3,10 +3,11 @@ use chrono::{DateTime, Utc, Duration, Datelike, Timelike};
 use rust_decimal::Decimal;
 use serde_json::Value;
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use crate::strategies::core::{
     Strategy, StrategyMetadata, StrategyMode, StrategyContext, StrategySignal,
-    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, IndicatorValue,
+    StrategyCategory, RiskLevel, LiveExecutableStrategy, ControllableStrategy, IndicatorValue, MarketData,
 };
 use crate::strategies::indicators;
 use crate::utils::errors::AppError;
@@ -478,7 +479,7 @@ impl DCAStrategy {
         }
 
         // Volume ratio (if available)
-        if let Some(volume_24h) = context.market_data.volume_24h {
+        if let Some(_volume_24h) = context.market_data.volume_24h {
             // This would require historical volume data to calculate ratio
             conditions.volume_ratio = Some(Decimal::from(1)); // Placeholder
         }
@@ -667,6 +668,40 @@ impl Strategy for DCAStrategy {
             .map_err(|e| AppError::BadRequest(format!("Failed to deserialize state: {}", e)))?;
         Ok(())
     }
+
+    /// Handle order updates - record executions when orders are filled
+    async fn on_order_update(&mut self, order: &crate::strategies::core::OrderUpdate) -> Result<(), AppError> {
+        // Only process filled market buy orders (DCA purchases)  
+        if order.status == crate::strategies::core::traits::OrderStatus::Filled && 
+           matches!(order.order_type, crate::strategies::core::traits::OrderType::Market) &&
+           order.filled_quantity > Decimal::ZERO {
+            
+            if let Some(execution_price) = order.price {
+                let amount = order.filled_quantity * execution_price;
+                
+                // Create minimal context for recording (in real system, this would come from engine)
+                let context = StrategyContext {
+                    strategy_id: Uuid::new_v4(),
+                    user_id: Uuid::new_v4(), 
+                    symbol: order.symbol.clone(),
+                    interval: "1h".to_string(),
+                    mode: StrategyMode::Live,
+                    current_time: order.timestamp,
+                    historical_data: Vec::new(),
+                    current_price: execution_price,
+                    available_balance: Decimal::ZERO,
+                    current_positions: Vec::new(),
+                    market_data: MarketData::default(),
+                };
+                
+                let market_conditions = MarketConditions::default();
+                self.record_execution(&context, amount, market_conditions);
+            }
+        }
+        
+        Ok(())
+    }
+
 }
 
 #[async_trait]
@@ -715,6 +750,7 @@ impl ControllableStrategy for DCAStrategy {
         self.is_paused
     }
 }
+
 
 impl Default for DCAStrategy {
     fn default() -> Self {
