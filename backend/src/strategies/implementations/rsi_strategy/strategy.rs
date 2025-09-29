@@ -581,3 +581,9 @@ impl ControllableStrategy for RSIStrategy {
         self.is_paused
     }
 }
+
+impl Default for RSIStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}

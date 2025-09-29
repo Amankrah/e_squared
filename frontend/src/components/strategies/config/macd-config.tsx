@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -121,6 +121,24 @@ export function MACDConfig({
   }
 
   const sensitivity = getSensitivityLevel()
+
+  const isFormValid = useMemo(() => {
+    const nameError = validateStrategyName(formData.name)
+    if (nameError) return false
+
+    const symbolError = validateAssetSymbol(formData.asset_symbol)
+    if (symbolError) return false
+
+    const amountError = validateInvestmentAmount(formData.config.investment_amount)
+    if (amountError) return false
+
+    if (formData.config.fast_period >= formData.config.slow_period) return false
+    if (formData.config.fast_period < 5 || formData.config.fast_period > 50) return false
+    if (formData.config.slow_period < 10 || formData.config.slow_period > 100) return false
+    if (formData.config.signal_period < 3 || formData.config.signal_period > 30) return false
+
+    return true
+  }, [formData])
 
   return (
     <Card className={cn(
@@ -459,7 +477,7 @@ export function MACDConfig({
                   variant="outline"
                   onClick={() => onBacktest(formData.config, formData.name, formData.asset_symbol)}
                   className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                  disabled={isLoading || !validateForm()}
+                  disabled={isLoading || !isFormValid}
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Backtest First

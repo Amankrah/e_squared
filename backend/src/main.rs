@@ -20,7 +20,7 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use config::Config;
 use handlers::AuthService;
-use middleware::SessionTrackingMiddleware;
+use middleware::{SessionTrackingMiddleware, auth::AuthMiddleware};
 use routes::configure_routes;
 use services::{MarketDataService, DCAExecutionEngine};
 use utils::encryption::EncryptionService;

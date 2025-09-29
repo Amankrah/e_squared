@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +30,6 @@ import { RSIConfig } from "@/components/strategies/config/rsi-config"
 import { SMAConfig } from "@/components/strategies/config/sma-crossover-config"
 import { MACDConfig } from "@/components/strategies/config/macd-config"
 import { DCAConfig } from "@/components/strategies/config/dca-config"
-import { BacktestingInterface } from "@/components/backtesting/backtesting-interface"
 import { 
   apiClient, 
   StrategyType, 
@@ -51,18 +50,12 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
-type ViewMode = 'overview' | 'create' | 'configure' | 'backtest'
+type ViewMode = 'overview' | 'create' | 'configure'
 
 export default function UnifiedStrategiesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedStrategyType, setSelectedStrategyType] = useState<StrategyType>()
-  const [pendingStrategyConfig, setPendingStrategyConfig] = useState<{
-    type: StrategyType
-    config: StrategyConfig
-    name: string
-    assetSymbol: string
-  } | null>(null)
   const [allStrategies, setAllStrategies] = useState<{
     dca: Strategy[]
     gridTrading: Strategy[]
@@ -92,26 +85,51 @@ export default function UnifiedStrategiesPage() {
 
   const loadAllStrategies = useCallback(async () => {
     if (!isAuthenticated) return
-    
+
     setLoading(true)
     try {
-      const results = await apiClient.getAllStrategies()
-      
+      // STEP 1: Get lightweight summary first
+      const strategySummary = await apiClient.getUserStrategySummary().catch(() => ({
+        authenticated: false,
+        strategy_types: [],
+        total_strategies: 0,
+        total_active: 0
+      }))
+
+      // If user has no strategies, return early
+      if (!strategySummary.authenticated || strategySummary.total_strategies === 0) {
+        setAllStrategies({
+          dca: [],
+          gridTrading: [],
+          smaCrossover: [],
+          rsi: [],
+          macd: []
+        })
+        return
+      }
+
+      // STEP 2: Only load strategy data for types the user actually has
+      const activeStrategyTypes = strategySummary.strategy_types.map(st => st.strategy_type)
+      const results = await apiClient.getStrategiesByTypes(activeStrategyTypes).catch(() => ({}))
+
+      // Type guard to ensure results has the expected structure
+      const hasValidResults = results && typeof results === 'object' && !Array.isArray(results)
+
       setAllStrategies({
-        dca: results.dca.strategies || [],
-        gridTrading: results.gridTrading.strategies || [],
-        smaCrossover: results.smaCrossover.strategies || [],
-        rsi: results.rsi.strategies || [],
-        macd: results.macd.strategies || []
+        dca: hasValidResults && 'dca' in results ? results.dca?.strategies || [] : [],
+        gridTrading: hasValidResults && 'gridTrading' in results ? results.gridTrading?.strategies || [] : [],
+        smaCrossover: hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : [],
+        rsi: hasValidResults && 'rsi' in results ? results.rsi?.strategies || [] : [],
+        macd: hasValidResults && 'macd' in results ? results.macd?.strategies || [] : []
       })
 
-      // Calculate summary stats
+      // Calculate summary stats from only loaded data
       const allStrategyArrays = [
-        results.dca.strategies,
-        results.gridTrading.strategies,
-        results.smaCrossover.strategies,
-        results.rsi.strategies,
-        results.macd.strategies
+        hasValidResults && 'dca' in results ? results.dca?.strategies || [] : [],
+        hasValidResults && 'gridTrading' in results ? results.gridTrading?.strategies || [] : [],
+        hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : [],
+        hasValidResults && 'rsi' in results ? results.rsi?.strategies || [] : [],
+        hasValidResults && 'macd' in results ? results.macd?.strategies || [] : []
       ]
       
       const totalStrategies = allStrategyArrays.reduce((sum, arr) => sum + arr.length, 0)
@@ -213,14 +231,34 @@ export default function UnifiedStrategiesPage() {
   }, [loadAllStrategies])
 
   const handleBacktestStrategy = useCallback((type: StrategyType, config: StrategyConfig, name: string, assetSymbol: string) => {
-    setPendingStrategyConfig({ type, config, name, assetSymbol })
-    setViewMode('backtest')
+    // Redirect to backtesting lab with strategy configuration
+    const strategyData = { type, config, name, assetSymbol }
+    localStorage.setItem('pendingBacktestStrategy', JSON.stringify(strategyData))
+    window.location.href = '/dashboard/backtesting'
   }, [])
 
-  const handleBacktestComplete = useCallback(() => {
-    setViewMode('configure')
-    setPendingStrategyConfig(null)
+  // Memoize backtest handlers to prevent re-renders
+  const dcaBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
+    handleBacktestStrategy('dca', config, name, assetSymbol), [handleBacktestStrategy])
+
+  const gridTradingBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
+    handleBacktestStrategy('grid_trading', config, name, assetSymbol), [handleBacktestStrategy])
+
+  const rsiBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
+    handleBacktestStrategy('rsi', config, name, assetSymbol), [handleBacktestStrategy])
+
+  const smaBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
+    handleBacktestStrategy('sma_crossover', config, name, assetSymbol), [handleBacktestStrategy])
+
+  const macdBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
+    handleBacktestStrategy('macd', config, name, assetSymbol), [handleBacktestStrategy])
+
+  // Memoize cancel handlers to prevent re-renders
+  const handleCancelStrategy = useCallback(() => {
+    setViewMode('overview')
+    setSelectedStrategyType(undefined)
   }, [])
+
 
   const handleDeleteStrategy = async (strategy: Strategy, type: StrategyType) => {
     if (!confirm(`Are you sure you want to delete "${strategy.name}"?`)) return
@@ -500,65 +538,40 @@ export default function UnifiedStrategiesPage() {
             {selectedStrategyType === 'dca' && (
               <DCAConfig
                 onSubmit={handleCreateDCAStrategy}
-                onCancel={() => {
-                  setViewMode('overview')
-                  setSelectedStrategyType(undefined)
-                }}
-                onBacktest={(config, name, assetSymbol) => 
-                  handleBacktestStrategy('dca', config, name, assetSymbol)
-                }
+                onCancel={handleCancelStrategy}
+                onBacktest={dcaBacktestHandler}
               />
             )}
             
             {selectedStrategyType === 'grid_trading' && (
               <GridTradingConfig
                 onSubmit={handleCreateGridTradingStrategy}
-                onCancel={() => {
-                  setViewMode('overview')
-                  setSelectedStrategyType(undefined)
-                }}
-                onBacktest={(config, name, assetSymbol) => 
-                  handleBacktestStrategy('grid_trading', config, name, assetSymbol)
-                }
+                onCancel={handleCancelStrategy}
+                onBacktest={gridTradingBacktestHandler}
               />
             )}
             
             {selectedStrategyType === 'rsi' && (
               <RSIConfig
                 onSubmit={handleCreateRSIStrategy}
-                onCancel={() => {
-                  setViewMode('overview')
-                  setSelectedStrategyType(undefined)
-                }}
-                onBacktest={(config, name, assetSymbol) => 
-                  handleBacktestStrategy('rsi', config, name, assetSymbol)
-                }
+                onCancel={handleCancelStrategy}
+                onBacktest={rsiBacktestHandler}
               />
             )}
 
             {selectedStrategyType === 'sma_crossover' && (
               <SMAConfig
                 onSubmit={handleCreateSMACrossoverStrategy}
-                onCancel={() => {
-                  setViewMode('overview')
-                  setSelectedStrategyType(undefined)
-                }}
-                onBacktest={(config, name, assetSymbol) => 
-                  handleBacktestStrategy('sma_crossover', config, name, assetSymbol)
-                }
+                onCancel={handleCancelStrategy}
+                onBacktest={smaBacktestHandler}
               />
             )}
 
             {selectedStrategyType === 'macd' && (
               <MACDConfig
                 onSubmit={handleCreateMACDStrategy}
-                onCancel={() => {
-                  setViewMode('overview')
-                  setSelectedStrategyType(undefined)
-                }}
-                onBacktest={(config, name, assetSymbol) => 
-                  handleBacktestStrategy('macd', config, name, assetSymbol)
-                }
+                onCancel={handleCancelStrategy}
+                onBacktest={macdBacktestHandler}
               />
             )}
             
@@ -574,10 +587,7 @@ export default function UnifiedStrategiesPage() {
                     Configuration component for {getStrategyDisplayName(selectedStrategyType)} is coming soon!
                   </p>
                   <Button
-                    onClick={() => {
-                      setViewMode('overview')
-                      setSelectedStrategyType(undefined)
-                    }}
+                    onClick={handleCancelStrategy}
                     variant="outline"
                     className="border-white/20 text-white/80 hover:bg-white/10"
                   >
@@ -589,16 +599,6 @@ export default function UnifiedStrategiesPage() {
           </div>
         )}
 
-        {viewMode === 'backtest' && pendingStrategyConfig && (
-          <div className="max-w-6xl mx-auto">
-            <BacktestingInterface
-              strategyType={pendingStrategyConfig.type}
-              strategyConfig={pendingStrategyConfig.config}
-              assetSymbol={pendingStrategyConfig.assetSymbol}
-              onClose={handleBacktestComplete}
-            />
-          </div>
-        )}
       </div>
     </DashboardLayout>
   )

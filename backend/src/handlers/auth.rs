@@ -260,24 +260,21 @@ pub async fn signup(
 
     info!("Creating new user account for email: {}", sanitized_email);
 
-    let user = new_user.save(db.as_ref().as_ref()).await
+    // Use insert_one which doesn't expect auto-generated ID
+    UserEntity::insert(new_user)
+        .exec_without_returning(db.as_ref().as_ref())
+        .await
         .map_err(|e| {
-            error!("Database save failed for user {}: {:?}", user_id, e);
+            error!("Database insert failed for user {}: {:?}", user_id, e);
             AppError::DatabaseError(e)
         })?;
 
-    // Convert ActiveModel back to Model for response
-    let user = Model {
-        id: user_id,
-        email: sanitized_email.clone(),
-        password_hash: user.password_hash.unwrap(),
-        is_active: user.is_active.unwrap(),
-        is_verified: user.is_verified.unwrap(),
-        totp_secret: user.totp_secret.unwrap(),
-        totp_enabled: user.totp_enabled.unwrap(),
-        created_at: user.created_at.unwrap(),
-        updated_at: user.updated_at.unwrap(),
-    };
+    // Fetch the created user
+    let user = UserEntity::find_by_id(user_id)
+        .one(db.as_ref().as_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or(AppError::InternalServerError)?;
 
     info!("User created successfully with ID: {}", user.id);
 

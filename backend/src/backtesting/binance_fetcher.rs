@@ -55,6 +55,30 @@ impl BinanceFetcher {
         }
     }
 
+    /// Convert base asset symbol to trading pair
+    /// For example: "BTC" -> "BTCUSDT", "ETH" -> "ETHUSDT"
+    fn convert_to_trading_pair(symbol: &str) -> String {
+        // If already a trading pair (contains USDT, USDC, etc.), return as is
+        if symbol.contains("USDT") || symbol.contains("USDC") || symbol.contains("BUSD") {
+            return symbol.to_uppercase();
+        }
+
+        // Common trading pairs mapping
+        match symbol.to_uppercase().as_str() {
+            "BTC" => "BTCUSDT".to_string(),
+            "ETH" => "ETHUSDT".to_string(),
+            "ADA" => "ADAUSDT".to_string(),
+            "SOL" => "SOLUSDT".to_string(),
+            "DOT" => "DOTUSDT".to_string(),
+            "LINK" => "LINKUSDT".to_string(),
+            "AVAX" => "AVAXUSDT".to_string(),
+            "MATIC" => "MATICUSDT".to_string(),
+            "UNI" => "UNIUSDT".to_string(),
+            "ATOM" => "ATOMUSDT".to_string(),
+            _ => format!("{}USDT", symbol.to_uppercase()),
+        }
+    }
+
     /// Fetch historical klines data with intelligent caching
     pub async fn fetch_klines(
         &self,
@@ -68,23 +92,27 @@ impl BinanceFetcher {
             return Err(AppError::BadRequest("Invalid time range".to_string()));
         }
 
-        // Check cache first
+        // Convert symbol to trading pair for Binance API
+        let trading_pair = Self::convert_to_trading_pair(symbol);
+        debug!("Converting symbol '{}' to trading pair '{}'", symbol, trading_pair);
+
+        // Check cache first (use original symbol for cache key)
         if let Some(cached_data) = self.cache.get(symbol, interval, start_time, end_time).await {
             info!("Using cached data for {}:{}", symbol, interval);
             return Ok((*cached_data).clone());
         }
 
-        // Fetch from Binance API
+        // Fetch from Binance API using trading pair
         info!(
-            "Fetching {} klines from {} to {}",
-            symbol, start_time, end_time
+            "Fetching {} klines from {} to {} (using trading pair: {})",
+            symbol, start_time, end_time, trading_pair
         );
 
         let all_klines = self
-            .fetch_klines_chunked(symbol, interval, start_time, end_time)
+            .fetch_klines_chunked(&trading_pair, interval, start_time, end_time)
             .await?;
 
-        // Store in cache for future requests
+        // Store in cache for future requests (use original symbol for cache key)
         self.cache
             .store(symbol, interval, start_time, end_time, all_klines.clone())
             .await;

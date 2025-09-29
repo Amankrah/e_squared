@@ -1,15 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
-import { 
-  GridTradingConfig,
-  CreateGridTradingStrategyRequest 
+import {
+  type GridTradingConfig,
+  CreateGridTradingStrategyRequest
 } from "@/lib/api"
 import { 
   validateStrategyName, 
@@ -124,6 +124,28 @@ export function GridTradingConfig({
   }
 
   const { spacing, investmentPerGrid } = calculateGridValue()
+
+  const isFormValid = useMemo(() => {
+    const nameError = validateStrategyName(formData.name)
+    if (nameError) return false
+
+    const symbolError = validateAssetSymbol(formData.asset_symbol)
+    if (symbolError) return false
+
+    const amountError = validateInvestmentAmount(formData.config.investment_amount)
+    if (amountError) return false
+
+    if (!formData.config.lower_price || parseFloat(formData.config.lower_price) <= 0) return false
+    if (!formData.config.upper_price || parseFloat(formData.config.upper_price) <= 0) return false
+
+    if (formData.config.lower_price && formData.config.upper_price) {
+      if (parseFloat(formData.config.lower_price) >= parseFloat(formData.config.upper_price)) return false
+    }
+
+    if (formData.config.grid_count < 3 || formData.config.grid_count > 50) return false
+
+    return true
+  }, [formData])
 
   return (
     <Card className={cn(
@@ -403,7 +425,7 @@ export function GridTradingConfig({
                   variant="outline"
                   onClick={() => onBacktest(formData.config, formData.name, formData.asset_symbol)}
                   className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                  disabled={isLoading || !validateForm()}
+                  disabled={isLoading || !isFormValid}
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Backtest First

@@ -64,8 +64,10 @@ impl fmt::Display for AppError {
 
 impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse {
+        tracing::error!("AppError occurred: {:?}", self);
         match self {
-            AppError::DatabaseError(_) => {
+            AppError::DatabaseError(db_err) => {
+                tracing::error!("Database error details: {}", db_err);
                 HttpResponse::InternalServerError().json(serde_json::json!({
                     "error": "Internal server error",
                     "message": "Database operation failed"
@@ -214,5 +216,11 @@ impl ResponseError for AppError {
                 }))
             }
         }
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::ParseError(format!("JSON serialization error: {}", err))
     }
 }

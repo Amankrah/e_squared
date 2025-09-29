@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -118,6 +118,24 @@ export function RSIConfig({
     if (value >= formData.config.overbought_threshold) return 'Overbought (Sell Zone)'
     return 'Neutral Zone'
   }
+
+  const isFormValid = useMemo(() => {
+    const nameError = validateStrategyName(formData.name)
+    if (nameError) return false
+
+    const symbolError = validateAssetSymbol(formData.asset_symbol)
+    if (symbolError) return false
+
+    const amountError = validateInvestmentAmount(formData.config.investment_amount)
+    if (amountError) return false
+
+    if (formData.config.rsi_period < 5 || formData.config.rsi_period > 50) return false
+    if (formData.config.oversold_threshold >= formData.config.overbought_threshold) return false
+    if (formData.config.oversold_threshold < 10 || formData.config.oversold_threshold > 40) return false
+    if (formData.config.overbought_threshold < 60 || formData.config.overbought_threshold > 90) return false
+
+    return true
+  }, [formData])
 
   return (
     <Card className={cn(
@@ -405,7 +423,7 @@ export function RSIConfig({
                   variant="outline"
                   onClick={() => onBacktest(formData.config, formData.name, formData.asset_symbol)}
                   className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                  disabled={isLoading || !validateForm()}
+                  disabled={isLoading || !isFormValid}
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Backtest First

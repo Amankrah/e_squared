@@ -8,5 +8,7 @@ pub mod rsi_strategy_management;
 pub mod macd_strategy_management;
 pub mod sma_crossover_strategy_management;
 pub mod grid_trading_strategy_management;
+pub mod strategy_summary;
+pub mod backtest_management;
 // Removed legacy strategy_templates_handler - using new modular system
 pub use auth::*;

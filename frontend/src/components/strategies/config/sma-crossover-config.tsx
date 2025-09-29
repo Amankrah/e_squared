@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -115,6 +115,24 @@ export function SMAConfig({
   }
 
   const signalStrength = getSignalStrength()
+
+  const isFormValid = useMemo(() => {
+    const nameError = validateStrategyName(formData.name)
+    if (nameError) return false
+
+    const symbolError = validateAssetSymbol(formData.asset_symbol)
+    if (symbolError) return false
+
+    const amountError = validateInvestmentAmount(formData.config.investment_amount)
+    if (amountError) return false
+
+    if (formData.config.short_period >= formData.config.long_period) return false
+    if (formData.config.short_period < 5 || formData.config.short_period > 100) return false
+    if (formData.config.long_period < 10 || formData.config.long_period > 200) return false
+    if (formData.config.confirmation_period && (formData.config.confirmation_period < 1 || formData.config.confirmation_period > 10)) return false
+
+    return true
+  }, [formData])
 
   return (
     <Card className={cn(
@@ -430,7 +448,7 @@ export function SMAConfig({
                   variant="outline"
                   onClick={() => onBacktest(formData.config, formData.name, formData.asset_symbol)}
                   className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-                  disabled={isLoading || !validateForm()}
+                  disabled={isLoading || !isFormValid}
                 >
                   <BarChart3 className="mr-2 h-4 w-4" />
                   Backtest First

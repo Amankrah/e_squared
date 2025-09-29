@@ -8,22 +8,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   TrendingUp, 
   TrendingDown, 
-  DollarSign, 
-  BarChart3, 
-  Activity,
-  Calendar,
   Target,
-  AlertTriangle,
   Award,
   Download,
   Share2
 } from "lucide-react"
 import { BacktestResult, StrategyInfo } from "@/lib/api"
+
+// Extended interface for results that include detailed data
+interface ExtendedBacktestResult extends BacktestResult {
+  equity_curve?: Array<{
+    timestamp: string
+    portfolio_value: string
+    drawdown: string
+    cumulative_return: string
+  }>
+  trades_data?: Array<{
+    timestamp: string
+    trade_type: 'Buy' | 'Sell'
+    price: string
+    quantity: string
+    total_value: string
+    portfolio_value: string
+    balance_remaining: string
+    reason: string
+    pnl?: string
+    pnl_percentage?: string
+    entry_date?: string
+    exit_date?: string
+    entry_price?: string
+    exit_price?: string
+    side?: 'buy' | 'sell'
+    duration_hours?: number
+    signal_reason?: string
+  }>
+}
 import { formatCurrency, formatPercentage } from "@/lib/strategies"
 import { cn } from "@/lib/utils"
 
 interface BacktestResultsProps {
-  results: BacktestResult
+  results: ExtendedBacktestResult
   strategyInfo: StrategyInfo
   className?: string
 }
@@ -37,29 +61,25 @@ export function BacktestResults({
 
   const isProfit = parseFloat(results.total_return) >= 0
   const returnColor = isProfit ? 'text-green-400' : 'text-red-400'
-  
-  // Calculate some additional metrics
-  const avgMonthlyReturn = (parseFloat(results.total_return_percentage) / 12).toFixed(2)
-  const riskAdjustedReturn = (parseFloat(results.total_return_percentage) / parseFloat(results.volatility)).toFixed(2)
 
   const getPerformanceRating = () => {
     const totalReturn = parseFloat(results.total_return_percentage)
-    const sharpeRatio = parseFloat(results.sharpe_ratio)
+    const sharpeRatio = results.sharpe_ratio ? parseFloat(results.sharpe_ratio) : 0
     const winRate = parseFloat(results.win_rate)
-    
+
     // Simple scoring system
     let score = 0
     if (totalReturn > 20) score += 3
     else if (totalReturn > 10) score += 2
     else if (totalReturn > 0) score += 1
-    
+
     if (sharpeRatio > 1.5) score += 3
     else if (sharpeRatio > 1.0) score += 2
     else if (sharpeRatio > 0.5) score += 1
-    
+
     if (winRate > 60) score += 2
     else if (winRate > 50) score += 1
-    
+
     if (score >= 7) return { rating: 'Excellent', color: 'text-green-400', bgColor: 'bg-green-500/10 border-green-500/20' }
     if (score >= 5) return { rating: 'Good', color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/20' }
     if (score >= 3) return { rating: 'Fair', color: 'text-yellow-400', bgColor: 'bg-yellow-500/10 border-yellow-500/20' }
@@ -70,15 +90,33 @@ export function BacktestResults({
 
   // Create simple chart data (you could integrate with a charting library like Chart.js or Recharts)
   const createEquityCurve = () => {
-    const points = results.daily_returns.map((daily, index) => ({
-      x: (index / results.daily_returns.length) * 100,
-      y: ((parseFloat(daily.portfolio_value) - parseFloat(results.initial_capital)) / parseFloat(results.initial_capital)) * 100
-    }))
-    
+    // Check if equity_curve data exists and is an array
+    if (!results.equity_curve || !Array.isArray(results.equity_curve) || results.equity_curve.length === 0) {
+      // Fallback: create a simple line from initial to final balance
+      const initialBalance = parseFloat(results.initial_balance)
+      const finalBalance = parseFloat(results.final_balance)
+      return [
+        { x: 0, y: 0, normalizedY: 50 },
+        { x: 100, y: ((finalBalance - initialBalance) / initialBalance) * 100, normalizedY: 50 }
+      ]
+    }
+
+    const points = results.equity_curve.map((dataPoint, index) => {
+      const portfolioValue = parseFloat(
+        dataPoint.portfolio_value ||
+        ('value' in dataPoint ? (dataPoint as { value: string }).value : results.final_balance)
+      )
+      const initialBalance = parseFloat(results.initial_balance)
+      return {
+        x: (index / results.equity_curve!.length) * 100,
+        y: ((portfolioValue - initialBalance) / initialBalance) * 100
+      }
+    })
+
     const maxY = Math.max(...points.map(p => p.y))
     const minY = Math.min(...points.map(p => p.y))
     const range = maxY - minY
-    
+
     return points.map(p => ({
       ...p,
       normalizedY: range === 0 ? 50 : ((p.y - minY) / range) * 80 + 10
@@ -105,7 +143,7 @@ export function BacktestResults({
                   Backtest Results
                 </CardTitle>
                 <CardDescription className="text-white/60">
-                  {results.asset_symbol} • {new Date(results.start_date).toLocaleDateString()} - {new Date(results.end_date).toLocaleDateString()}
+                  {results.symbol} • {new Date(results.start_date).toLocaleDateString()} - {new Date(results.end_date).toLocaleDateString()}
                 </CardDescription>
               </div>
             </div>
@@ -137,7 +175,7 @@ export function BacktestResults({
 
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <div className="text-2xl font-bold text-white/90">
-                  {results.sharpe_ratio}
+                  {results.sharpe_ratio ? parseFloat(results.sharpe_ratio).toFixed(2) : 'N/A'}
                 </div>
                 <div className="text-sm text-white/60 mt-1">Sharpe Ratio</div>
                 <div className="text-xs text-white/50">Risk-adjusted return</div>
@@ -189,10 +227,10 @@ export function BacktestResults({
                   />
                 </svg>
                 <div className="absolute bottom-2 left-2 text-xs text-white/50">
-                  Start: {formatCurrency(results.initial_capital)}
+                  Start: {formatCurrency(results.initial_balance)}
                 </div>
                 <div className="absolute bottom-2 right-2 text-xs text-white/50">
-                  End: {formatCurrency(results.final_capital)}
+                  End: {formatCurrency(results.final_balance)}
                 </div>
               </div>
             </div>
@@ -254,13 +292,13 @@ export function BacktestResults({
                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                       <span className="text-white/70">Annualized Return</span>
                       <span className="text-white/90 font-medium">
-                        {(parseFloat(results.total_return_percentage) * (365 / results.metrics.total_days)).toFixed(2)}%
+                        {(parseFloat(results.total_return_percentage) * 1).toFixed(2)}%
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                       <span className="text-white/70">Volatility</span>
                       <span className="text-white/90 font-medium">
-                        {formatPercentage(results.volatility)}
+                        N/A
                       </span>
                     </div>
                   </div>
@@ -279,13 +317,13 @@ export function BacktestResults({
                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                       <span className="text-white/70">Sharpe Ratio</span>
                       <span className="text-white/90 font-medium">
-                        {results.sharpe_ratio}
+                        {results.sharpe_ratio ? parseFloat(results.sharpe_ratio).toFixed(2) : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                       <span className="text-white/70">Sortino Ratio</span>
                       <span className="text-white/90 font-medium">
-                        {results.sortino_ratio}
+                        N/A
                       </span>
                     </div>
                   </div>
@@ -302,35 +340,46 @@ export function BacktestResults({
               </div>
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {results.trades.slice(0, 20).map((trade, index) => (
+                {results.trades_data && Array.isArray(results.trades_data) ? results.trades_data.slice(0, 20).map((trade, index) => (
                   <div key={index} className="p-3 bg-white/5 rounded-lg flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <div className={cn(
                         "w-2 h-2 rounded-full",
-                        parseFloat(trade.pnl) >= 0 ? "bg-green-400" : "bg-red-400"
+                        trade.pnl && parseFloat(trade.pnl) >= 0 ? "bg-green-400" :
+                        trade.trade_type === 'Buy' ? "bg-blue-400" : "bg-orange-400"
                       )} />
                       <div>
                         <div className="text-sm font-medium text-white/90">
-                          {trade.side.toUpperCase()} @ {formatCurrency(trade.entry_price)}
+                          {(trade.side || trade.trade_type || 'Trade').toUpperCase()} @ {formatCurrency(trade.entry_price || trade.price)}
                         </div>
                         <div className="text-xs text-white/60">
-                          {new Date(trade.entry_date).toLocaleDateString()}
+                          {new Date(trade.entry_date || trade.timestamp).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={cn(
-                        "text-sm font-medium",
-                        parseFloat(trade.pnl) >= 0 ? "text-green-400" : "text-red-400"
-                      )}>
-                        {formatCurrency(trade.pnl)}
-                      </div>
+                      {trade.pnl ? (
+                        <div className={cn(
+                          "text-sm font-medium",
+                          parseFloat(trade.pnl) >= 0 ? "text-green-400" : "text-red-400"
+                        )}>
+                          {formatCurrency(trade.pnl)}
+                        </div>
+                      ) : (
+                        <div className="text-sm font-medium text-white/90">
+                          {formatCurrency(trade.total_value || '0')}
+                        </div>
+                      )}
                       <div className="text-xs text-white/60">
-                        {formatPercentage(trade.pnl_percentage)}
+                        {trade.pnl_percentage ? formatPercentage(trade.pnl_percentage) : 'N/A'}
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-white/5 rounded-lg text-center text-white/60">
+                    No trade data available
+                  </div>
+                )}
               </div>
             </TabsContent>
             
@@ -373,11 +422,11 @@ export function BacktestResults({
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Profit Factor</span>
-                      <span className="text-white/90">{results.profit_factor}</span>
+                      <span className="text-white/90">{results.profit_factor ? parseFloat(results.profit_factor).toFixed(2) : 'N/A'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Best Day</span>
-                      <span className="text-green-400">{formatPercentage(results.metrics.best_day)}</span>
+                      <span className="text-green-400">N/A</span>
                     </div>
                   </div>
                 </div>
@@ -388,19 +437,19 @@ export function BacktestResults({
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Calmar Ratio</span>
-                      <span className="text-white/90">{results.metrics.calmar_ratio}</span>
+                      <span className="text-white/90">N/A</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Recovery Factor</span>
-                      <span className="text-white/90">{results.metrics.recovery_factor}</span>
+                      <span className="text-white/90">N/A</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Max Consecutive Losses</span>
-                      <span className="text-red-400">{results.metrics.max_consecutive_losses}</span>
+                      <span className="text-red-400">N/A</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/70">Worst Day</span>
-                      <span className="text-red-400">{formatPercentage(results.metrics.worst_day)}</span>
+                      <span className="text-red-400">N/A</span>
                     </div>
                   </div>
                 </div>
@@ -445,7 +494,7 @@ export function BacktestResults({
                     <span className="font-medium text-blue-400">Recommendations</span>
                   </div>
                   <ul className="text-sm text-white/70 space-y-1">
-                    {parseFloat(results.sharpe_ratio) < 1 && (
+                    {results.sharpe_ratio && parseFloat(results.sharpe_ratio) < 1 && (
                       <li>• Low Sharpe ratio suggests high risk-adjusted returns could be improved</li>
                     )}
                     {parseFloat(results.win_rate) < 40 && (

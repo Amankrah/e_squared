@@ -262,26 +262,94 @@ export interface LiveBalancesResponse {
   last_updated: string
 }
 
-// DCA Strategy Types
+// DCA Strategy Types - Backend Compatible
+export interface DCAFrequency {
+  Hourly?: number
+  Daily?: number
+  Weekly?: number
+  Monthly?: number
+  Custom?: number
+}
+
+export interface DCARSIConfig {
+  period: number
+  oversold_threshold: number
+  overbought_threshold: number
+  oversold_multiplier: number
+  overbought_multiplier: number
+  normal_multiplier: number
+}
+
+export interface VolatilityConfig {
+  period: number
+  low_threshold: number
+  high_threshold: number
+  low_volatility_multiplier: number
+  high_volatility_multiplier: number
+  normal_multiplier: number
+}
+
+export interface SentimentConfig {
+  fear_greed_threshold?: number
+  social_sentiment_threshold?: number
+  news_sentiment_threshold?: number
+  bearish_multiplier: number
+  bullish_multiplier: number
+}
+
+export interface DynamicFactors {
+  rsi_weight: number
+  volatility_weight: number
+  sentiment_weight: number
+  trend_weight: number
+  max_multiplier: number
+  min_multiplier: number
+}
+
+export interface DipBuyingLevel {
+  price_drop_percentage: number
+  amount_multiplier: number
+  max_triggers?: number
+}
+
+export interface DCAFilters {
+  allowed_hours?: number[]
+  allowed_weekdays?: number[]
+  min_interval_minutes?: number
+  max_executions_per_day?: number
+  min_volume_threshold?: number
+  max_spread_percentage?: number
+  max_price_deviation_percentage?: number
+}
+
+export interface DCAConfig {
+  base_amount: number
+  frequency: DCAFrequency
+  strategy_type: 'Simple' | 'RSIBased' | 'VolatilityBased' | 'Dynamic' | 'DipBuying' | 'SentimentBased'
+  rsi_config?: DCARSIConfig
+  volatility_config?: VolatilityConfig
+  sentiment_config?: SentimentConfig
+  dynamic_factors?: DynamicFactors
+  dip_levels?: DipBuyingLevel[]
+  reference_price?: number
+  reference_period_days?: number
+  max_single_amount?: number
+  min_single_amount?: number
+  max_position_size?: number
+  pause_on_high_volatility: boolean
+  volatility_pause_threshold?: number
+  pause_on_bear_market: boolean
+  bear_market_threshold?: number
+  filters: DCAFilters
+}
+
 export interface DCAStrategy {
   id: string
   user_id: string
   name: string
   asset_symbol: string
-  total_allocation: string
-  base_tranche_size: string
   status: string
-  strategy_type: string
-  sentiment_multiplier: boolean
-  volatility_adjustment: boolean
-  fear_greed_threshold_buy: number
-  fear_greed_threshold_sell: number
-  max_tranche_percentage: string
-  min_tranche_percentage: string
-  dca_interval_hours: number
-  target_zones?: string[]
-  stop_loss_percentage?: string
-  take_profit_percentage?: string
+  config: DCAConfig
   total_invested: string
   total_purchased: string
   average_buy_price?: string
@@ -312,17 +380,7 @@ export interface DCAExecution {
 export interface CreateDCAStrategyRequest {
   name: string
   asset_symbol: string
-  total_allocation: number
-  base_tranche_percentage: number
-  strategy_type: string
-  sentiment_multiplier: boolean
-  volatility_adjustment: boolean
-  fear_greed_threshold_buy: number
-  fear_greed_threshold_sell: number
-  dca_interval_hours: number
-  target_zones?: number[]
-  stop_loss_percentage?: number
-  take_profit_percentage?: number
+  config: DCAConfig
 }
 
 export interface DCAStrategiesResponse {
@@ -508,7 +566,7 @@ export interface MACDStrategiesResponse {
 
 // Unified Strategy Types
 export type Strategy = DCAStrategy | GridTradingStrategy | SMACrossoverStrategy | RSIStrategy | MACDStrategy
-export type StrategyConfig = GridTradingConfig | SMACrossoverConfig | RSIConfig | MACDConfig
+export type StrategyConfig = DCAConfig | GridTradingConfig | SMACrossoverConfig | RSIConfig | MACDConfig
 export type CreateStrategyRequest = CreateDCAStrategyRequest | CreateGridTradingStrategyRequest | CreateSMACrossoverStrategyRequest | CreateRSIStrategyRequest | CreateMACDStrategyRequest
 export type StrategiesResponse = DCAStrategiesResponse | GridTradingStrategiesResponse | SMACrossoverStrategiesResponse | RSIStrategiesResponse | MACDStrategiesResponse
 
@@ -533,34 +591,115 @@ export interface BacktestRequest {
   end_date: string
   initial_capital: number
   config: StrategyConfig
+  interval?: string
 }
 
-export interface BacktestResult {
-  id: string
-  strategy_type: StrategyType
-  asset_symbol: string
+// Backend-compatible backtest request
+export interface BackendBacktestRequest {
+  symbol: string
+  interval: string
   start_date: string
   end_date: string
-  initial_capital: string
-  final_capital: string
+  initial_balance: number
+  strategy_name: string
+  strategy_parameters?: any
+  stop_loss_percentage?: number
+  take_profit_percentage?: number
+}
+
+// Database backtest result model (from history endpoint)
+export interface BacktestResult {
+  id: string
+  name: string
+  description?: string
+  strategy_name: string
+  symbol: string
+  interval: string
+  start_date: string
+  end_date: string
+  initial_balance: string
+  final_balance: string
   total_return: string
   total_return_percentage: string
   max_drawdown: string
   max_drawdown_percentage: string
-  sharpe_ratio: string
-  sortino_ratio: string
-  win_rate: string
+  sharpe_ratio?: string
   total_trades: number
   winning_trades: number
   losing_trades: number
+  win_rate: string
+  profit_factor?: string
+  largest_win: string
+  largest_loss: string
   average_win: string
   average_loss: string
-  profit_factor: string
-  volatility: string
-  daily_returns: DailyReturn[]
-  trades: BacktestTrade[]
-  metrics: BacktestMetrics
+  status: string
+  error_message?: string
+  execution_time_ms?: number
   created_at: string
+  updated_at: string
+}
+
+// Backtest engine result (from run backtest endpoint)
+export interface BacktestEngineResult {
+  backtest_id: string
+  config: any
+  trades: BacktestTrade[]
+  metrics: BacktestEngineMetrics
+  performance_chart: PerformancePoint[]
+  execution_time_ms: number
+}
+
+export interface BacktestEngineMetrics {
+  total_return: string
+  total_return_percentage: string
+  annualized_return?: string
+  sharpe_ratio?: string
+  max_drawdown: string
+  volatility: string
+  total_trades: number
+  winning_trades: number
+  losing_trades: number
+  win_rate: string
+  average_win: string
+  average_loss: string
+  profit_factor?: string
+  final_portfolio_value: string
+  benchmark_return?: string
+  alpha?: string
+  beta?: string
+}
+
+export interface PerformancePoint {
+  timestamp: string
+  portfolio_value: string
+  drawdown: string
+  cumulative_return: string
+}
+
+export interface BacktestResultDetail extends BacktestResult {
+  strategy_parameters: any
+  trades_data: any
+  equity_curve: any
+  drawdown_curve: any
+}
+
+export interface BacktestListResponse {
+  results: BacktestResult[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    total_pages: number
+  }
+}
+
+export interface BacktestListQuery {
+  page?: number
+  limit?: number
+  strategy_name?: string
+  symbol?: string
+  status?: string
 }
 
 export interface DailyReturn {
@@ -572,16 +711,24 @@ export interface DailyReturn {
 }
 
 export interface BacktestTrade {
-  entry_date: string
-  exit_date: string
-  entry_price: string
-  exit_price: string
+  timestamp: string
+  trade_type: 'Buy' | 'Sell'
+  price: string
   quantity: string
-  side: 'buy' | 'sell'
-  pnl: string
-  pnl_percentage: string
-  duration_hours: number
-  signal_reason: string
+  total_value: string
+  portfolio_value: string
+  balance_remaining: string
+  reason: string
+  pnl?: string
+  pnl_percentage?: string
+  // Legacy fields for compatibility
+  entry_date?: string
+  exit_date?: string
+  entry_price?: string
+  exit_price?: string
+  side?: 'buy' | 'sell'
+  duration_hours?: number
+  signal_reason?: string
 }
 
 export interface BacktestMetrics {
@@ -670,13 +817,6 @@ export interface UserProfile {
   market_preference: string[]
 }
 
-export interface BacktestRequest {
-  symbol: string
-  start_date: string
-  end_date: string
-  interval: string
-  total_allocation: number
-}
 
 export interface BacktestResults {
   config: any
@@ -1037,9 +1177,16 @@ class ApiClient {
   }
 
   async createDCAStrategy(data: CreateDCAStrategyRequest): Promise<DCAStrategy> {
+    // Transform the data to match backend expectations
+    const transformedData = {
+      name: data.name,
+      asset_symbol: data.asset_symbol,
+      config_json: JSON.stringify(data.config)
+    }
+
     return this.request<DCAStrategy>('/dca/strategies', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(transformedData),
     })
   }
 
@@ -1066,9 +1213,16 @@ class ApiClient {
   }
 
   async createGridTradingStrategy(data: CreateGridTradingStrategyRequest): Promise<GridTradingStrategy> {
+    // Transform frontend config to backend config
+    const transformedData = {
+      name: data.name,
+      asset_symbol: data.asset_symbol,
+      config: this.transformGridTradingConfig(data.config)
+    }
+
     return this.request<GridTradingStrategy>('/grid-trading/strategies', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(transformedData),
     })
   }
 
@@ -1095,9 +1249,16 @@ class ApiClient {
   }
 
   async createSMACrossoverStrategy(data: CreateSMACrossoverStrategyRequest): Promise<SMACrossoverStrategy> {
+    // Transform frontend config to backend config
+    const transformedData = {
+      name: data.name,
+      asset_symbol: data.asset_symbol,
+      config: this.transformSMACrossoverConfig(data.config)
+    }
+
     return this.request<SMACrossoverStrategy>('/sma-crossover/strategies', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(transformedData),
     })
   }
 
@@ -1124,9 +1285,16 @@ class ApiClient {
   }
 
   async createRSIStrategy(data: CreateRSIStrategyRequest): Promise<RSIStrategy> {
+    // Transform frontend config to backend config
+    const transformedData = {
+      name: data.name,
+      asset_symbol: data.asset_symbol,
+      config: this.transformRSIConfig(data.config)
+    }
+
     return this.request<RSIStrategy>('/rsi/strategies', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(transformedData),
     })
   }
 
@@ -1153,9 +1321,16 @@ class ApiClient {
   }
 
   async createMACDStrategy(data: CreateMACDStrategyRequest): Promise<MACDStrategy> {
+    // Transform frontend config to backend config
+    const transformedData = {
+      name: data.name,
+      asset_symbol: data.asset_symbol,
+      config: this.transformMACDConfig(data.config)
+    }
+
     return this.request<MACDStrategy>('/macd/strategies', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(transformedData),
     })
   }
 
@@ -1176,7 +1351,76 @@ class ApiClient {
     })
   }
 
-  // Unified Strategy Management
+  // Strategy Summary (lightweight endpoint)
+  async getUserStrategySummary(): Promise<{
+    authenticated: boolean
+    strategy_types: Array<{
+      strategy_type: string
+      count: number
+      has_active: boolean
+    }>
+    total_strategies: number
+    total_active: number
+  }> {
+    return this.request('/auth/strategy-summary')
+  }
+
+  // Conditional Strategy Loading (only load specific strategy types)
+  async getStrategiesByTypes(types: string[]): Promise<{
+    dca?: DCAStrategiesResponse
+    gridTrading?: GridTradingStrategiesResponse
+    smaCrossover?: SMACrossoverStrategiesResponse
+    rsi?: RSIStrategiesResponse
+    macd?: MACDStrategiesResponse
+  }> {
+    const promises: Promise<any>[] = []
+    const results: any = {}
+
+    if (types.includes('dca')) {
+      promises.push(
+        this.getDCAStrategies()
+          .then(data => { results.dca = data })
+          .catch(() => { results.dca = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
+      )
+    }
+
+    if (types.includes('grid_trading')) {
+      promises.push(
+        this.getGridTradingStrategies()
+          .then(data => { results.gridTrading = data })
+          .catch(() => { results.gridTrading = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
+      )
+    }
+
+    if (types.includes('sma_crossover')) {
+      promises.push(
+        this.getSMACrossoverStrategies()
+          .then(data => { results.smaCrossover = data })
+          .catch(() => { results.smaCrossover = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
+      )
+    }
+
+    if (types.includes('rsi')) {
+      promises.push(
+        this.getRSIStrategies()
+          .then(data => { results.rsi = data })
+          .catch(() => { results.rsi = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
+      )
+    }
+
+    if (types.includes('macd')) {
+      promises.push(
+        this.getMACDStrategies()
+          .then(data => { results.macd = data })
+          .catch(() => { results.macd = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
+      )
+    }
+
+    await Promise.all(promises)
+    return results
+  }
+
+  // Unified Strategy Management (keep for backward compatibility but discourage use)
   async getAllStrategies(): Promise<{
     dca: DCAStrategiesResponse
     gridTrading: GridTradingStrategiesResponse
@@ -1195,20 +1439,443 @@ class ApiClient {
     return { dca, gridTrading, smaCrossover, rsi, macd }
   }
 
+  // Configuration transformation helpers
+  private transformDCAConfig(config: any): DCAConfig {
+    // Handle different frequency formats
+    let frequency: DCAFrequency
+    if (config.dca_interval_hours) {
+      if (config.dca_interval_hours === 24) {
+        frequency = { Daily: 1 }
+      } else if (config.dca_interval_hours === 168) {
+        frequency = { Weekly: 1 }
+      } else if (config.dca_interval_hours < 24) {
+        frequency = { Hourly: config.dca_interval_hours }
+      } else {
+        frequency = { Custom: config.dca_interval_hours * 60 } // Convert to minutes
+      }
+    } else {
+      frequency = { Daily: 1 } // Default
+    }
+
+    // Map strategy type from frontend to backend format
+    let strategyType: DCAConfig['strategy_type']
+    switch (config.strategy_type) {
+      case 'conservative':
+      case 'simple':
+        strategyType = 'Simple'
+        break
+      case 'rsi_based':
+      case 'aggressive':
+        strategyType = 'RSIBased'
+        break
+      case 'volatility_based':
+        strategyType = 'VolatilityBased'
+        break
+      case 'dynamic':
+      case 'moderate':
+        strategyType = 'Dynamic'
+        break
+      case 'dip_buying':
+        strategyType = 'DipBuying'
+        break
+      case 'sentiment_based':
+        strategyType = 'SentimentBased'
+        break
+      default:
+        strategyType = 'Simple'
+    }
+
+    // Create backend-compatible DCA config
+    const dcaConfig: DCAConfig = {
+      base_amount: config.base_amount || config.total_allocation || 1000,
+      frequency,
+      strategy_type: strategyType,
+      pause_on_high_volatility: config.pause_on_high_volatility || false,
+      pause_on_bear_market: config.pause_on_bear_market || false,
+      filters: {
+        allowed_hours: config.allowed_hours,
+        allowed_weekdays: config.allowed_weekdays,
+        min_interval_minutes: config.min_interval_minutes,
+        max_executions_per_day: config.max_executions_per_day,
+        min_volume_threshold: config.min_volume_threshold,
+        max_spread_percentage: config.max_spread_percentage,
+        max_price_deviation_percentage: config.max_price_deviation_percentage
+      }
+    }
+
+    // Add optional configurations based on strategy type and frontend config
+    if (config.sentiment_multiplier || config.fear_greed_threshold_buy || config.fear_greed_threshold_sell) {
+      dcaConfig.sentiment_config = {
+        fear_greed_threshold: config.fear_greed_threshold_buy,
+        bearish_multiplier: config.fear_multiplier || 1.5,
+        bullish_multiplier: config.greed_multiplier || 0.7
+      }
+    }
+
+    if (config.volatility_adjustment || strategyType === 'VolatilityBased' || strategyType === 'Dynamic') {
+      dcaConfig.volatility_config = {
+        period: config.volatility_period || 20,
+        low_threshold: config.volatility_low_threshold || 10,
+        high_threshold: config.volatility_high_threshold || 30,
+        low_volatility_multiplier: config.low_volatility_multiplier || 0.8,
+        high_volatility_multiplier: config.high_volatility_multiplier || 1.5,
+        normal_multiplier: 1.0
+      }
+      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold
+    }
+
+    if (strategyType === 'RSIBased' || strategyType === 'Dynamic') {
+      dcaConfig.rsi_config = {
+        period: config.rsi_period || 14,
+        oversold_threshold: config.rsi_oversold || 30,
+        overbought_threshold: config.rsi_overbought || 70,
+        oversold_multiplier: config.rsi_oversold_multiplier || 2.0,
+        overbought_multiplier: config.rsi_overbought_multiplier || 0.5,
+        normal_multiplier: 1.0
+      } as DCARSIConfig
+    }
+
+    if (strategyType === 'Dynamic') {
+      dcaConfig.dynamic_factors = {
+        rsi_weight: config.rsi_weight || 0.3,
+        volatility_weight: config.volatility_weight || 0.3,
+        sentiment_weight: config.sentiment_weight || 0.2,
+        trend_weight: config.trend_weight || 0.2,
+        max_multiplier: config.max_multiplier || 3.0,
+        min_multiplier: config.min_multiplier || 0.3
+      }
+    }
+
+    if (strategyType === 'DipBuying' && config.dip_levels) {
+      dcaConfig.dip_levels = config.dip_levels.map((level: any) => ({
+        price_drop_percentage: level.price_drop_percentage || level.drop_percentage,
+        amount_multiplier: level.amount_multiplier || level.multiplier,
+        max_triggers: level.max_triggers
+      }))
+      dcaConfig.reference_price = config.reference_price
+      dcaConfig.reference_period_days = config.reference_period_days || 30
+    }
+
+    // Risk management settings
+    if (config.max_single_amount) dcaConfig.max_single_amount = config.max_single_amount
+    if (config.min_single_amount) dcaConfig.min_single_amount = config.min_single_amount
+    if (config.max_position_size) dcaConfig.max_position_size = config.max_position_size
+    if (config.bear_market_threshold) dcaConfig.bear_market_threshold = config.bear_market_threshold
+
+    return dcaConfig
+  }
+
+  private transformGridTradingConfig(config: any): any {
+    return {
+      grid_levels: config.grid_count || 10,
+      total_investment: parseFloat(config.investment_amount || '1000'),
+      spacing: {
+        mode: 'Standard',
+        fixed_spacing: 0.02, // 2% default spacing
+        dynamic_base_pct: null,
+        volatility_factor: null,
+        geometric_multiplier: null
+      },
+      bounds: {
+        upper_bound: parseFloat(config.upper_price || '50000'),
+        lower_bound: parseFloat(config.lower_price || '40000'),
+        bounds_type: 'AbsolutePrice',
+        auto_adjust: false,
+        use_support_resistance: false
+      },
+      risk_settings: {
+        max_inventory: parseFloat(config.investment_amount || '1000') * 0.5,
+        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
+        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
+        max_drawdown_pct: 10.0,
+        max_time_in_position: null,
+        dynamic_adjustment: false,
+        volatility_pause_threshold: null
+      },
+      min_order_size: 10.0,
+      max_order_size: null,
+      enable_rebalancing: config.rebalance_threshold ? true : false,
+      rebalancing_interval: 24,
+      take_profit_threshold: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
+      stop_loss_threshold: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
+      market_making: {
+        enabled: false,
+        spread_pct: 0.2,
+        inventory_target: 0.0,
+        max_inventory_deviation: 500.0,
+        inventory_adjustment: true,
+        inventory_skew_factor: 0.1
+      }
+    }
+  }
+
+  private transformRSIConfig(config: any): any {
+    return {
+      rsi_period: config.rsi_period || 14,
+      overbought_level: config.overbought_threshold || 70,
+      oversold_level: config.oversold_threshold || 30,
+      enable_long: true,
+      enable_short: false,
+      position_sizing: {
+        sizing_method: 'PortfolioPercentage',
+        fixed_size: null,
+        portfolio_percentage: 5.0,
+        risk_per_trade: 2.0,
+        max_position_size: parseFloat(config.investment_amount || '300'),
+        min_position_size: 10.0
+      },
+      risk_management: {
+        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 5.0,
+        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 10.0,
+        max_drawdown_pct: 15.0,
+        max_consecutive_losses: 3,
+        cooldown_period: 30,
+        rsi_stop_loss: 10.0,
+        trailing_stop: {
+          enabled: true,
+          activation_threshold: 3.0,
+          trailing_distance: 2.0,
+          rsi_based_trailing: false,
+          rsi_trailing_buffer: 5.0
+        }
+      },
+      signal_filters: {
+        min_volume: null,
+        max_spread_pct: 0.5,
+        sma_trend_confirmation: false,
+        sma_trend_period: 50,
+        min_rsi_change: 5.0,
+        price_action_confirmation: false
+      },
+      divergence_config: {
+        enabled: false,
+        lookback_periods: 50,
+        min_strength: 0.6,
+        enable_regular_divergence: true,
+        enable_hidden_divergence: false,
+        swing_sensitivity: 1.5,
+        min_swing_size: 2.0
+      },
+      exit_strategy: {
+        strategy_type: 'RSIReversal',
+        rsi_exit_levels: {
+          long_exit_level: 70.0,
+          short_exit_level: 30.0,
+          centerline_exit: true
+        },
+        time_based_exit: null,
+        profit_target_multiplier: 2.0,
+        partial_exits: null
+      },
+      performance_config: {
+        detailed_tracking: true,
+        calculate_sharpe: true,
+        risk_free_rate: 2.0,
+        reporting_interval: 24,
+        max_trade_history: 1000
+      }
+    }
+  }
+
+  private transformSMACrossoverConfig(config: any): any {
+    return {
+      fast_period: config.short_period || 20,
+      slow_period: config.long_period || 50,
+      position_size_pct: 5.0, // 5% of portfolio per trade
+      risk_settings: {
+        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 2.0,
+        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 4.0,
+        max_position_pct: 10.0,
+        min_signal_interval: 30,
+        trailing_stop: false,
+        trailing_stop_pct: null
+      },
+      filters: {
+        min_volume: null,
+        max_spread_pct: 0.5,
+        rsi_overbought: 70.0,
+        rsi_oversold: 30.0,
+        macd_confirmation: false,
+        min_sma_spread_pct: 0.1
+      },
+      enable_long: true,
+      enable_short: false,
+      use_market_orders: false,
+      confirmation_indicators: {
+        use_rsi: false,
+        rsi_period: 14,
+        use_macd: false,
+        macd_fast: 12,
+        macd_slow: 26,
+        macd_signal: 9,
+        use_volume: false,
+        volume_period: 20,
+        min_volume_multiplier: 1.5
+      }
+    }
+  }
+
+  private transformMACDConfig(config: any): any {
+    return {
+      fast_period: config.fast_period || 12,
+      slow_period: config.slow_period || 26,
+      signal_period: config.signal_period || 9,
+      enable_long: true,
+      enable_short: false,
+      position_sizing: {
+        sizing_method: 'PortfolioPercentage',
+        fixed_size: null,
+        portfolio_percentage: 5.0,
+        risk_per_trade: 2.0,
+        max_position_size: parseFloat(config.investment_amount || '400'),
+        min_position_size: 10.0,
+        scale_by_macd_strength: true
+      },
+      risk_management: {
+        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 4.0,
+        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 12.0,
+        max_drawdown_pct: 15.0,
+        max_consecutive_losses: 3,
+        cooldown_period: 30,
+        macd_reversal_stop: true,
+        histogram_stop_threshold: 0.0005,
+        trailing_stop: {
+          enabled: true,
+          activation_threshold: 2.5,
+          trailing_distance: 1.5,
+          macd_based_trailing: true,
+          macd_trailing_buffer: 0.0001
+        }
+      },
+      signal_filters: {
+        min_volume: null,
+        max_spread_pct: 0.5,
+        min_histogram_change: 0.0001,
+        min_crossover_distance: 0.00001,
+        sma_trend_confirmation: false,
+        sma_trend_period: 50,
+        price_action_confirmation: false,
+        filter_consolidation: false
+      },
+      signal_config: {
+        enable_signal_crossover: true,
+        enable_zero_crossover: true,
+        enable_divergence: false,
+        enable_histogram: true,
+        signal_strength: {
+          min_strong_histogram: 0.0001,
+          min_crossover_distance: 0.00005,
+          min_momentum_change: 0.00001,
+          require_histogram_acceleration: true
+        },
+        confirmation: {
+          price_confirmation: true,
+          price_confirmation_bars: 2,
+          volume_confirmation: false,
+          volume_increase_threshold: 1.2,
+          trend_alignment: true,
+          trend_sma_period: 50
+        }
+      },
+      exit_strategy: {
+        strategy_type: 'MACDReversal',
+        macd_exit_conditions: {
+          opposite_crossover: true,
+          zero_line_exit: false,
+          histogram_reversal: true,
+          histogram_reversal_threshold: 0.0003,
+          momentum_weakening: true,
+          momentum_periods: 3
+        },
+        partial_exits: null,
+        time_based_exit: null,
+        profit_target_multiplier: 2.0
+      },
+      performance_config: {
+        detailed_tracking: true,
+        calculate_sharpe: true,
+        risk_free_rate: 2.0,
+        reporting_interval: 24,
+        max_trade_history: 1000,
+        track_macd_metrics: true
+      }
+    }
+  }
+
   // Backtesting endpoints
-  async runBacktest(data: BacktestRequest): Promise<BacktestResult> {
-    return this.request<BacktestResult>('/backtesting/run', {
+  async runBacktest(data: BacktestRequest): Promise<BacktestEngineResult> {
+    // Transform config based on strategy type
+    let transformedConfig = data.config
+    let stopLossPercentage: number | undefined
+    let takeProfitPercentage: number | undefined
+
+    switch (data.strategy_type) {
+      case 'dca':
+        transformedConfig = this.transformDCAConfig(data.config)
+        // Extract stop loss and take profit from DCA config if present
+        if ('stop_loss_percentage' in data.config && data.config.stop_loss_percentage) {
+          stopLossPercentage = parseFloat(data.config.stop_loss_percentage.toString())
+        }
+        if ('take_profit_percentage' in data.config && data.config.take_profit_percentage) {
+          takeProfitPercentage = parseFloat(data.config.take_profit_percentage.toString())
+        }
+        break
+      case 'grid_trading':
+        transformedConfig = this.transformGridTradingConfig(data.config)
+        break
+      case 'rsi':
+        transformedConfig = this.transformRSIConfig(data.config)
+        break
+      case 'sma_crossover':
+        transformedConfig = this.transformSMACrossoverConfig(data.config)
+        break
+      case 'macd':
+        transformedConfig = this.transformMACDConfig(data.config)
+        break
+    }
+
+    // Map frontend strategy types to backend strategy names
+    const strategyNameMap: Record<StrategyType, string> = {
+      'dca': 'dca_v2',
+      'grid_trading': 'grid_trading_v2',
+      'sma_crossover': 'sma_crossover_v2',
+      'rsi': 'rsi_v1',
+      'macd': 'macd_v1'
+    }
+
+    // Convert frontend format to backend format
+    const backendRequest: BackendBacktestRequest = {
+      symbol: data.asset_symbol,
+      interval: data.interval || '1d', // Use provided interval or default to daily
+      start_date: data.start_date + 'T00:00:00Z',
+      end_date: data.end_date + 'T23:59:59Z',
+      initial_balance: data.initial_capital,
+      strategy_name: strategyNameMap[data.strategy_type] || data.strategy_type,
+      strategy_parameters: transformedConfig,
+      stop_loss_percentage: stopLossPercentage,
+      take_profit_percentage: takeProfitPercentage
+    }
+
+    return this.request<BacktestEngineResult>('/backtesting/run', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(backendRequest),
     })
   }
 
-  async getBacktestResult(backtestId: string): Promise<BacktestResult> {
-    return this.request<BacktestResult>(`/backtesting/results/${backtestId}`)
+  async getBacktestResult(backtestId: string): Promise<BacktestResultDetail> {
+    return this.request<BacktestResultDetail>(`/backtesting/results/${backtestId}`)
   }
 
-  async getUserBacktests(): Promise<BacktestResult[]> {
-    return this.request<BacktestResult[]>('/backtesting/results')
+  async getUserBacktests(query?: BacktestListQuery): Promise<BacktestListResponse> {
+    const searchParams = new URLSearchParams()
+    if (query?.page) searchParams.append('page', query.page.toString())
+    if (query?.limit) searchParams.append('limit', query.limit.toString())
+    if (query?.strategy_name) searchParams.append('strategy_name', query.strategy_name)
+    if (query?.symbol) searchParams.append('symbol', query.symbol)
+    if (query?.status) searchParams.append('status', query.status)
+
+    const url = `/backtesting/results${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+    return this.request<BacktestListResponse>(url)
   }
 
   async deleteBacktest(backtestId: string): Promise<{ message: string }> {
@@ -1264,8 +1931,8 @@ class ApiClient {
   }
 
 
-  // Backtesting endpoints
-  async runBacktest(templateId: string, request: BacktestRequest): Promise<BacktestResults> {
+  // Template backtesting endpoints
+  async runTemplateBacktest(templateId: string, request: BacktestRequest): Promise<BacktestResults> {
     return this.request<BacktestResults>(`/strategy-templates/${templateId}/backtest`, {
       method: 'POST',
       body: JSON.stringify(request),

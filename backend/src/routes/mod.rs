@@ -2,11 +2,12 @@ pub mod backtesting;
 
 use actix_web::{web, HttpResponse};
 use serde_json::json;
+use crate::middleware::auth::AuthMiddleware;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
     dca_strategy_management, rsi_strategy_management, macd_strategy_management,
-    sma_crossover_strategy_management, grid_trading_strategy_management,
+    sma_crossover_strategy_management, grid_trading_strategy_management, strategy_summary,
 };
 
 /// Configure all application routes
@@ -80,6 +81,7 @@ fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
             .route("/logout", web::post().to(auth::logout))
             .route("/csrf-token", web::get().to(auth::get_csrf_token))
             .route("/me", web::get().to(auth::get_current_user_optional))
+            .route("/strategy-summary", web::get().to(strategy_summary::get_user_strategy_summary))
             .service(
                 web::scope("")
                     .route("/profile", web::get().to(auth::get_current_user))

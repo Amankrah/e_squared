@@ -16,6 +16,7 @@ use crate::models::dca_strategy::{
 };
 use crate::services::{DCAExecutionEngine, MarketDataService};
 use crate::utils::errors::AppError;
+use crate::handlers::AuthService;
 
 /// Create a new DCA strategy
 pub async fn create_dca_strategy(

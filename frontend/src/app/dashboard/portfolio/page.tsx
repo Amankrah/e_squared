@@ -1,30 +1,28 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  BarChart3, 
+import {
+  TrendingUp,
+  DollarSign,
+  BarChart3,
   Activity,
   Target,
   RefreshCw,
-  Calendar,
   Award,
   AlertTriangle,
   PieChart,
-  LineChart
+  LineChart,
+  PlusCircle
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { 
   apiClient, 
   Strategy, 
-  StrategyType, 
-  ExchangeConnection
+  StrategyType
 } from "@/lib/api"
 import { 
   getStrategyInfo, 
@@ -63,7 +61,7 @@ export default function PortfolioPage() {
     rsi: [],
     macd: []
   })
-  const [connections, setConnections] = useState<ExchangeConnection[]>([])
+ 
   const [portfolioStats, setPortfolioStats] = useState<PortfolioStats>({
     totalValue: 0,
     totalInvested: 0,
@@ -79,37 +77,48 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview')
 
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      loadPortfolioData()
-    }
-  }, [isAuthenticated, authLoading])
-
-  const loadPortfolioData = async () => {
+  const loadPortfolioData = React.useCallback(async () => {
     if (!isAuthenticated) return
-    
+
     setLoading(true)
     try {
-      const [strategiesRes, connectionsRes] = await Promise.all([
-        apiClient.getAllStrategies().catch(() => ({
-          dca: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          gridTrading: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          smaCrossover: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          rsi: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          macd: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 }
-        })),
-        apiClient.getExchangeConnections().catch(() => ({ connections: [] }))
-      ])
+      // STEP 1: Get lightweight summary
+      const strategySummary = await apiClient.getUserStrategySummary().catch(() => ({
+        authenticated: false,
+        strategy_types: [],
+        total_strategies: 0,
+        total_active: 0
+      }))
+
+      // If user has no strategies, return early
+      if (!strategySummary.authenticated || strategySummary.total_strategies === 0) {
+        setAllStrategies({
+          dca: [],
+          gridTrading: [],
+          smaCrossover: [],
+          rsi: [],
+          macd: []
+        })
+        return
+      }
+
+      // STEP 2: Only load strategy data for types the user actually has
+      const activeStrategyTypes = strategySummary.strategy_types.map(st => st.strategy_type)
+      const strategiesRes = await apiClient.getStrategiesByTypes(activeStrategyTypes).catch(() => ({
+        dca: undefined,
+        gridTrading: undefined,
+        smaCrossover: undefined,
+        rsi: undefined,
+        macd: undefined
+      }))
 
       setAllStrategies({
-        dca: strategiesRes.dca.strategies || [],
-        gridTrading: strategiesRes.gridTrading.strategies || [],
-        smaCrossover: strategiesRes.smaCrossover.strategies || [],
-        rsi: strategiesRes.rsi.strategies || [],
-        macd: strategiesRes.macd.strategies || []
+        dca: strategiesRes.dca?.strategies || [],
+        gridTrading: strategiesRes.gridTrading?.strategies || [],
+        smaCrossover: strategiesRes.smaCrossover?.strategies || [],
+        rsi: strategiesRes.rsi?.strategies || [],
+        macd: strategiesRes.macd?.strategies || []
       })
-      
-      setConnections(connectionsRes.connections || [])
 
       // Calculate portfolio statistics
       calculatePortfolioStats(strategiesRes)
@@ -119,15 +128,27 @@ export default function PortfolioPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isAuthenticated])
 
-  const calculatePortfolioStats = (strategiesRes: any) => {
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      loadPortfolioData()
+    }
+  }, [isAuthenticated, authLoading, loadPortfolioData])
+
+  const calculatePortfolioStats = (strategiesRes: {
+    dca?: { strategies: Strategy[] };
+    gridTrading?: { strategies: Strategy[] };
+    smaCrossover?: { strategies: Strategy[] };
+    rsi?: { strategies: Strategy[] };
+    macd?: { strategies: Strategy[] };
+  }) => {
     const allStrategyArrays = [
-      ...strategiesRes.dca.strategies.map((s: Strategy) => ({ strategy: s, type: 'dca' as StrategyType })),
-      ...strategiesRes.gridTrading.strategies.map((s: Strategy) => ({ strategy: s, type: 'grid_trading' as StrategyType })),
-      ...strategiesRes.smaCrossover.strategies.map((s: Strategy) => ({ strategy: s, type: 'sma_crossover' as StrategyType })),
-      ...strategiesRes.rsi.strategies.map((s: Strategy) => ({ strategy: s, type: 'rsi' as StrategyType })),
-      ...strategiesRes.macd.strategies.map((s: Strategy) => ({ strategy: s, type: 'macd' as StrategyType }))
+      ...(strategiesRes.dca?.strategies || []).map((s: Strategy) => ({ strategy: s, type: 'dca' as StrategyType })),
+      ...(strategiesRes.gridTrading?.strategies || []).map((s: Strategy) => ({ strategy: s, type: 'grid_trading' as StrategyType })),
+      ...(strategiesRes.smaCrossover?.strategies || []).map((s: Strategy) => ({ strategy: s, type: 'sma_crossover' as StrategyType })),
+      ...(strategiesRes.rsi?.strategies || []).map((s: Strategy) => ({ strategy: s, type: 'rsi' as StrategyType })),
+      ...(strategiesRes.macd?.strategies || []).map((s: Strategy) => ({ strategy: s, type: 'macd' as StrategyType }))
     ]
 
     const totalInvested = allStrategyArrays.reduce((sum, { strategy }) => 
@@ -174,11 +195,13 @@ export default function PortfolioPage() {
     // Calculate strategy type allocation
     const strategyAllocation: { [strategy: string]: number } = {}
     Object.entries(strategiesRes).forEach(([key, data]) => {
-      const invested = data.strategies.reduce((sum: number, s: Strategy) => 
-        sum + parseFloat(s.total_invested || '0'), 0
-      )
-      if (invested > 0) {
-        strategyAllocation[key] = invested
+      if (data && data.strategies) {
+        const invested = data.strategies.reduce((sum: number, s: Strategy) =>
+          sum + parseFloat(s.total_invested || '0'), 0
+        )
+        if (invested > 0) {
+          strategyAllocation[key] = invested
+        }
       }
     })
 

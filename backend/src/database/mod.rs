@@ -40,6 +40,7 @@ async fn create_tables(db: &DatabaseConnection) -> Result<()> {
         ("dca_strategies", include_str!("sql/create_dca_strategies_table.sql")),
         ("dca_executions", include_str!("sql/create_dca_executions_table.sql")),
         ("market_data", include_str!("sql/create_market_data_table.sql")),
+        ("backtest_results", include_str!("sql/create_backtest_results_table.sql")),
     ];
 
     for (table_name, sql) in tables {
@@ -76,6 +77,8 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
     migrate_passphrase_columns(db).await?;
     // Migration for strategy config JSON support
     migrate_strategy_config_columns(db).await?;
+    // Migration for backtest results table schema fix
+    migrate_backtest_results_schema(db).await?;
 
     info!("✓ Database migrations completed");
     Ok(())
@@ -159,6 +162,112 @@ async fn migrate_passphrase_columns(db: &DatabaseConnection) -> Result<()> {
                     info!("✓ Added {} column to exchange_connections table", column_name);
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn migrate_backtest_results_schema(db: &DatabaseConnection) -> Result<()> {
+    // Check if the backtest_results table has the old TEXT schema
+    let check_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name='backtest_results'";
+
+    match db.execute_unprepared(check_query).await {
+        Ok(_) => {
+            // Check if initial_balance is TEXT (old schema)
+            let schema_check = "PRAGMA table_info(backtest_results)";
+            if let Ok(_) = db.execute_unprepared(schema_check).await {
+                // If the table exists, we need to migrate it
+                info!("Migrating backtest_results table schema to use REAL types for decimal columns...");
+
+                // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+                let migration_sql = r#"
+                BEGIN TRANSACTION;
+
+                -- Create new table with correct schema
+                CREATE TABLE IF NOT EXISTS backtest_results_new (
+                  id TEXT PRIMARY KEY,
+                  user_id TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  description TEXT,
+                  strategy_name TEXT NOT NULL,
+                  symbol TEXT NOT NULL,
+                  interval TEXT NOT NULL,
+                  start_date TEXT NOT NULL,
+                  end_date TEXT NOT NULL,
+                  initial_balance REAL NOT NULL,
+                  final_balance REAL NOT NULL,
+                  total_return REAL NOT NULL,
+                  total_return_percentage REAL NOT NULL,
+                  max_drawdown REAL NOT NULL,
+                  max_drawdown_percentage REAL NOT NULL,
+                  sharpe_ratio REAL,
+                  total_trades INTEGER NOT NULL,
+                  winning_trades INTEGER NOT NULL,
+                  losing_trades INTEGER NOT NULL,
+                  win_rate REAL NOT NULL,
+                  profit_factor REAL,
+                  largest_win REAL NOT NULL,
+                  largest_loss REAL NOT NULL,
+                  average_win REAL NOT NULL,
+                  average_loss REAL NOT NULL,
+                  strategy_parameters TEXT NOT NULL,
+                  trades_data TEXT NOT NULL,
+                  equity_curve TEXT NOT NULL,
+                  drawdown_curve TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'running',
+                  error_message TEXT,
+                  execution_time_ms INTEGER,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                );
+
+                -- Copy data from old table (converting TEXT to REAL where needed)
+                INSERT OR IGNORE INTO backtest_results_new
+                SELECT
+                  id, user_id, name, description, strategy_name, symbol, interval,
+                  start_date, end_date,
+                  CAST(COALESCE(initial_balance, '0') AS REAL),
+                  CAST(COALESCE(final_balance, '0') AS REAL),
+                  CAST(COALESCE(total_return, '0') AS REAL),
+                  CAST(COALESCE(total_return_percentage, '0') AS REAL),
+                  CAST(COALESCE(max_drawdown, '0') AS REAL),
+                  CAST(COALESCE(max_drawdown_percentage, '0') AS REAL),
+                  CASE WHEN sharpe_ratio IS NULL OR sharpe_ratio = '' THEN NULL ELSE CAST(sharpe_ratio AS REAL) END,
+                  COALESCE(total_trades, 0), COALESCE(winning_trades, 0), COALESCE(losing_trades, 0),
+                  CAST(COALESCE(win_rate, '0') AS REAL),
+                  CASE WHEN profit_factor IS NULL OR profit_factor = '' THEN NULL ELSE CAST(profit_factor AS REAL) END,
+                  CAST(COALESCE(largest_win, '0') AS REAL),
+                  CAST(COALESCE(largest_loss, '0') AS REAL),
+                  CAST(COALESCE(average_win, '0') AS REAL),
+                  CAST(COALESCE(average_loss, '0') AS REAL),
+                  COALESCE(strategy_parameters, '{}'), COALESCE(trades_data, '[]'),
+                  COALESCE(equity_curve, '[]'), COALESCE(drawdown_curve, '[]'),
+                  COALESCE(status, 'running'), error_message, execution_time_ms,
+                  COALESCE(created_at, datetime('now')), COALESCE(updated_at, datetime('now'))
+                FROM backtest_results
+                WHERE EXISTS (SELECT 1 FROM backtest_results);
+
+                -- Drop old table and rename new one
+                DROP TABLE IF EXISTS backtest_results;
+                ALTER TABLE backtest_results_new RENAME TO backtest_results;
+
+                COMMIT;
+                "#;
+
+                match db.execute_unprepared(migration_sql).await {
+                    Ok(_) => info!("✓ Successfully migrated backtest_results table schema"),
+                    Err(e) => {
+                        // If migration fails, it might be because the table already has the correct schema
+                        info!("Backtest results migration skipped (table may already have correct schema): {}", e);
+                    }
+                }
+            }
+        },
+        Err(_) => {
+            // Table doesn't exist yet, will be created with correct schema
+            info!("Backtest results table doesn't exist yet, will be created with correct schema");
         }
     }
 

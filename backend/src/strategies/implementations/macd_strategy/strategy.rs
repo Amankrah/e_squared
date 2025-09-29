@@ -791,3 +791,9 @@ impl ControllableStrategy for MACDStrategy {
         self.is_paused
     }
 }
+
+impl Default for MACDStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}

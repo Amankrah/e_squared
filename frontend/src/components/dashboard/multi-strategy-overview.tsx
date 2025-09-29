@@ -67,26 +67,48 @@ export function MultiStrategyOverview({ className }: MultiStrategyOverviewProps)
 
   const loadStrategies = async () => {
     if (!isAuthenticated) return
-    
+
     setLoading(true)
     try {
-      const results = await apiClient.getAllStrategies()
-      
+      // STEP 1: Get lightweight summary first
+      const strategySummary = await apiClient.getUserStrategySummary().catch(() => ({
+        authenticated: false,
+        strategy_types: [],
+        total_strategies: 0,
+        total_active: 0
+      }))
+
+      // If user has no strategies, return early
+      if (!strategySummary.authenticated || strategySummary.total_strategies === 0) {
+        setAllStrategies({
+          dca: [],
+          gridTrading: [],
+          smaCrossover: [],
+          rsi: [],
+          macd: []
+        })
+        return
+      }
+
+      // STEP 2: Only load strategy data for types the user actually has
+      const activeStrategyTypes = strategySummary.strategy_types.map(st => st.strategy_type)
+      const results = await apiClient.getStrategiesByTypes(activeStrategyTypes).catch(() => ({}))
+
       setAllStrategies({
-        dca: results.dca.strategies || [],
-        gridTrading: results.gridTrading.strategies || [],
-        smaCrossover: results.smaCrossover.strategies || [],
-        rsi: results.rsi.strategies || [],
-        macd: results.macd.strategies || []
+        dca: results.dca?.strategies || [],
+        gridTrading: results.gridTrading?.strategies || [],
+        smaCrossover: results.smaCrossover?.strategies || [],
+        rsi: results.rsi?.strategies || [],
+        macd: results.macd?.strategies || []
       })
 
-      // Calculate enhanced summary statistics
+      // Calculate enhanced summary statistics from only loaded data
       const allStrategyArrays = [
-        ...results.dca.strategies.map(s => ({ strategy: s, type: 'dca' as StrategyType })),
-        ...results.gridTrading.strategies.map(s => ({ strategy: s, type: 'grid_trading' as StrategyType })),
-        ...results.smaCrossover.strategies.map(s => ({ strategy: s, type: 'sma_crossover' as StrategyType })),
-        ...results.rsi.strategies.map(s => ({ strategy: s, type: 'rsi' as StrategyType })),
-        ...results.macd.strategies.map(s => ({ strategy: s, type: 'macd' as StrategyType }))
+        ...(results.dca?.strategies || []).map(s => ({ strategy: s, type: 'dca' as StrategyType })),
+        ...(results.gridTrading?.strategies || []).map(s => ({ strategy: s, type: 'grid_trading' as StrategyType })),
+        ...(results.smaCrossover?.strategies || []).map(s => ({ strategy: s, type: 'sma_crossover' as StrategyType })),
+        ...(results.rsi?.strategies || []).map(s => ({ strategy: s, type: 'rsi' as StrategyType })),
+        ...(results.macd?.strategies || []).map(s => ({ strategy: s, type: 'macd' as StrategyType }))
       ]
       
       const totalStrategies = allStrategyArrays.length

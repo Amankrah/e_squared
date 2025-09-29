@@ -252,9 +252,10 @@ impl SMACrossoverStrategy {
     fn calculate_position_size(&self, context: &StrategyContext, analysis: &CrossoverAnalysis) -> Decimal {
         let config = self.config.as_ref().unwrap();
         let available_balance = context.available_balance;
+        let current_price = context.current_price;
 
-        // Base position size from configuration
-        let base_size = available_balance * config.position_size_pct / Decimal::from(100);
+        // Base position size from configuration (dollar amount)
+        let base_dollar_size = available_balance * config.position_size_pct / Decimal::from(100);
 
         // Adjust based on signal strength
         let strength_multiplier = match analysis.strength {
@@ -267,11 +268,21 @@ impl SMACrossoverStrategy {
         // Adjust based on confidence
         let confidence_multiplier = Decimal::new(5, 1) + (analysis.confidence * Decimal::new(5, 1)); // 0.5 to 1.0
 
-        let adjusted_size = base_size * strength_multiplier * confidence_multiplier;
+        let adjusted_dollar_size = base_dollar_size * strength_multiplier * confidence_multiplier;
 
-        // Apply maximum position size limit
-        let max_size = available_balance * config.risk_settings.max_position_pct / Decimal::from(100);
-        adjusted_size.min(max_size)
+        // Apply maximum position size limit (dollar amount)
+        let max_dollar_size = available_balance * config.risk_settings.max_position_pct / Decimal::from(100);
+        let final_dollar_size = adjusted_dollar_size.min(max_dollar_size);
+
+        // Convert dollar amount to quantity of units
+        if current_price > Decimal::ZERO {
+            let quantity = final_dollar_size / current_price;
+            debug!("Position sizing: ${:.2} ÷ ${:.2} = {:.8} units",
+                   final_dollar_size, current_price, quantity);
+            quantity
+        } else {
+            Decimal::ZERO
+        }
     }
 
     /// Capture current market conditions

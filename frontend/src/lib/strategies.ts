@@ -1,7 +1,7 @@
-import { 
-  StrategyType, 
-  StrategyInfo, 
-  Strategy, 
+import {
+  StrategyType,
+  StrategyInfo,
+  Strategy,
   StrategyConfig,
   DCAStrategy,
   GridTradingStrategy,
@@ -143,7 +143,7 @@ export function getStrategyStatusColor(status: string): string {
 
 // Strategy type guards
 export function isDCAStrategy(strategy: Strategy): strategy is DCAStrategy {
-  return 'config' in strategy && 'base_tranche_size' in strategy
+  return 'config' in strategy && strategy.config && 'base_amount' in strategy.config && 'frequency' in strategy.config
 }
 
 export function isGridTradingStrategy(strategy: Strategy): strategy is GridTradingStrategy {
@@ -193,12 +193,34 @@ export function formatPercentage(value: string | number): string {
 }
 
 // Default configurations for new strategies
-export const DEFAULT_CONFIGS: Record<StrategyType, Partial<StrategyConfig>> = {
+export const DEFAULT_CONFIGS: Record<StrategyType, StrategyConfig> = {
   dca: {
-    // Will be handled by existing DCA logic
+    base_amount: 1000,
+    frequency: { Daily: 1 },
+    strategy_type: 'Simple',
+    pause_on_high_volatility: false,
+    pause_on_bear_market: false,
+    filters: {},
+    sentiment_config: {
+      fear_greed_threshold: 25,
+      bearish_multiplier: 1.5,
+      bullish_multiplier: 0.7
+    },
+    volatility_config: {
+      period: 20,
+      low_threshold: 10,
+      high_threshold: 30,
+      low_volatility_multiplier: 0.8,
+      high_volatility_multiplier: 1.5,
+      normal_multiplier: 1.0
+    },
+    stop_loss_percentage: '10',
+    take_profit_percentage: '20'
   },
   grid_trading: {
     grid_count: 10,
+    lower_price: '40000',
+    upper_price: '50000',
     investment_amount: '1000',
     stop_loss_percentage: '5',
     take_profit_percentage: '15'
@@ -255,7 +277,7 @@ export function validateAssetSymbol(symbol: string): string | null {
 
 export function validateInvestmentAmount(amount: string | number): string | null {
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
-  
+
   if (isNaN(numAmount) || numAmount <= 0) {
     return 'Investment amount must be a positive number'
   }
@@ -264,6 +286,141 @@ export function validateInvestmentAmount(amount: string | number): string | null
   }
   if (numAmount > 1000000) {
     return 'Maximum investment amount is $1,000,000'
+  }
+  return null
+}
+
+// Enhanced DCA-specific validation functions
+export function validateDCAFrequency(frequencyType: string, frequencyValue: number): string | null {
+  if (frequencyValue <= 0) {
+    return 'Frequency value must be positive'
+  }
+
+  switch (frequencyType) {
+    case 'hourly':
+      if (frequencyValue > 24) {
+        return 'Hourly frequency cannot exceed 24 hours'
+      }
+      break
+    case 'daily':
+      if (frequencyValue > 365) {
+        return 'Daily frequency cannot exceed 365 days'
+      }
+      break
+    case 'weekly':
+      if (frequencyValue > 52) {
+        return 'Weekly frequency cannot exceed 52 weeks'
+      }
+      break
+    case 'monthly':
+      if (frequencyValue > 12) {
+        return 'Monthly frequency cannot exceed 12 months'
+      }
+      break
+    case 'custom':
+      if (frequencyValue > 525600) { // 1 year in minutes
+        return 'Custom frequency cannot exceed 1 year in minutes'
+      }
+      break
+  }
+
+  return null
+}
+
+export function validateRSIConfig(config: {
+  period: number
+  oversold: number
+  overbought: number
+  oversoldMultiplier: number
+  overboughtMultiplier: number
+}): string | null {
+  if (config.period < 2 || config.period > 100) {
+    return 'RSI period must be between 2 and 100'
+  }
+  if (config.oversold <= 0 || config.oversold >= 100) {
+    return 'RSI oversold threshold must be between 0 and 100'
+  }
+  if (config.overbought <= 0 || config.overbought >= 100) {
+    return 'RSI overbought threshold must be between 0 and 100'
+  }
+  if (config.oversold >= config.overbought) {
+    return 'RSI oversold threshold must be less than overbought threshold'
+  }
+  if (config.oversoldMultiplier < 0 || config.oversoldMultiplier > 10) {
+    return 'RSI oversold multiplier must be between 0 and 10'
+  }
+  if (config.overboughtMultiplier < 0 || config.overboughtMultiplier > 10) {
+    return 'RSI overbought multiplier must be between 0 and 10'
+  }
+  return null
+}
+
+export function validateVolatilityConfig(config: {
+  period: number
+  lowThreshold: number
+  highThreshold: number
+  lowMultiplier: number
+  highMultiplier: number
+}): string | null {
+  if (config.period < 2 || config.period > 100) {
+    return 'Volatility period must be between 2 and 100'
+  }
+  if (config.lowThreshold <= 0 || config.lowThreshold >= 100) {
+    return 'Low volatility threshold must be between 0 and 100'
+  }
+  if (config.highThreshold <= 0 || config.highThreshold >= 100) {
+    return 'High volatility threshold must be between 0 and 100'
+  }
+  if (config.lowThreshold >= config.highThreshold) {
+    return 'Low volatility threshold must be less than high threshold'
+  }
+  if (config.lowMultiplier < 0 || config.lowMultiplier > 5) {
+    return 'Low volatility multiplier must be between 0 and 5'
+  }
+  if (config.highMultiplier < 0 || config.highMultiplier > 5) {
+    return 'High volatility multiplier must be between 0 and 5'
+  }
+  return null
+}
+
+export function validateSentimentConfig(config: {
+  fearGreedThreshold?: number
+  bearishMultiplier: number
+  bullishMultiplier: number
+}): string | null {
+  if (config.fearGreedThreshold !== undefined) {
+    if (config.fearGreedThreshold < 0 || config.fearGreedThreshold > 100) {
+      return 'Fear & Greed threshold must be between 0 and 100'
+    }
+  }
+  if (config.bearishMultiplier < 0 || config.bearishMultiplier > 10) {
+    return 'Bearish multiplier must be between 0 and 10'
+  }
+  if (config.bullishMultiplier < 0 || config.bullishMultiplier > 10) {
+    return 'Bullish multiplier must be between 0 and 10'
+  }
+  return null
+}
+
+export function validateRiskManagement(config: {
+  stopLossPercentage?: number
+  takeProfitPercentage?: number
+  maxPositionSize?: number
+}): string | null {
+  if (config.stopLossPercentage !== undefined) {
+    if (config.stopLossPercentage <= 0 || config.stopLossPercentage > 100) {
+      return 'Stop loss percentage must be between 0 and 100'
+    }
+  }
+  if (config.takeProfitPercentage !== undefined) {
+    if (config.takeProfitPercentage <= 0 || config.takeProfitPercentage > 1000) {
+      return 'Take profit percentage must be between 0 and 1000'
+    }
+  }
+  if (config.maxPositionSize !== undefined) {
+    if (config.maxPositionSize <= 0) {
+      return 'Maximum position size must be positive'
+    }
   }
   return null
 }

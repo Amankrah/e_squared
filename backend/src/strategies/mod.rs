@@ -15,11 +15,17 @@ pub fn init_all_strategies() -> Result<(), AppError> {
     // Initialize DCA strategies
     implementations::dca::init_dca_strategies()?;
 
-    // TODO: Initialize other strategy types as they are implemented
-    // implementations::rsi::init_rsi_strategies()?;
-    // implementations::sma_crossover::init_sma_strategies()?;
-    // implementations::macd::init_macd_strategies()?;
-    // implementations::grid_trading::init_grid_strategies()?;
+    // Initialize RSI strategies
+    implementations::rsi_strategy::init_rsi_strategies()?;
+
+    // Initialize SMA Crossover strategies
+    implementations::sma_crossover::init_sma_crossover_strategies()?;
+
+    // Initialize MACD strategies
+    implementations::macd_strategy::init_macd_strategies()?;
+
+    // Initialize Grid Trading strategies
+    implementations::grid_trading::init_grid_trading_strategies()?;
 
     tracing::info!("All trading strategies initialized successfully");
     Ok(())

@@ -37,7 +37,7 @@ export default function StrategiesPage() {
                   Strategy Management Upgraded! 
                 </CardTitle>
                 <CardDescription className="text-white/60 text-lg">
-                  We've enhanced your trading experience with a unified multi-strategy platform
+                  We&apos;ve enhanced your trading experience with a unified multi-strategy platform
                 </CardDescription>
               </div>
             </CardHeader>

@@ -40,7 +40,7 @@ export default function About() {
                 </h1>
 
                 <p className="text-xl text-gray-200 max-w-4xl mx-auto leading-relaxed">
-                  We're on a mission to democratize cryptocurrency trading by making
+                  We&apos;re on a mission to democratize cryptocurrency trading by making
                   professional-grade strategies accessible to beginners worldwide.
                 </p>
               </div>
@@ -70,13 +70,13 @@ export default function About() {
 
               <div className="space-y-6">
                 <p className="text-lg text-gray-300 leading-relaxed">
-                  E-Squared<span className="text-sm align-super">2</span> Trading was founded with a simple belief: everyone deserves
+                  E-Squared Trading was founded with a simple belief: everyone deserves
                   access to professional trading tools and strategies, regardless of their
                   experience level.
                 </p>
                 <p className="text-lg text-gray-300 leading-relaxed">
                   Traditional trading platforms are complex, intimidating, and designed
-                  for experts. We're changing that by combining powerful algorithms with
+                  for experts. We&apos;re changing that by combining powerful algorithms with
                   intuitive design, making it possible for anyone to build and execute
                   profitable trading strategies.
                 </p>
@@ -263,7 +263,7 @@ export default function About() {
             </h2>
 
             <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-              We're building the future of trading - where artificial intelligence
+              We&apos;re building the future of trading - where artificial intelligence
               meets human intuition to create unprecedented opportunities.
             </p>
           </div>
@@ -300,7 +300,7 @@ export default function About() {
 
                   <p className="text-gray-300 leading-relaxed">
                     Building a worldwide community of traders who share knowledge,
-                    strategies, and support each other's success.
+                    strategies, and support each other&apos;s success.
                   </p>
                 </div>
               </div>

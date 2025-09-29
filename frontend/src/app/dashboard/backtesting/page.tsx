@@ -1,46 +1,38 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { 
-  TestTube, 
-  Play, 
-  BarChart3, 
-  TrendingUp, 
-  TrendingDown,
+import {
+  TestTube,
+  BarChart3,
   Calendar,
-  DollarSign,
   RefreshCw,
-  Download,
   Trash2,
   Award,
-  AlertTriangle,
-  Target,
-  Activity,
-  PlusCircle
+  Target
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
-import { StrategyTypeSelector } from "@/components/strategies/strategy-type-selector"
-import { BacktestingInterface } from "@/components/backtesting/backtesting-interface"
+import { StrategyBacktestSelector } from "@/components/backtesting/strategy-backtest-selector"
 import { BacktestResults } from "@/components/backtesting/backtest-results"
-import { 
-  apiClient, 
-  StrategyType, 
-  BacktestResult, 
+import { DCAConfig } from "@/components/strategies/config/dca-config"
+import { GridTradingConfig } from "@/components/strategies/config/grid-trading-config"
+import { SMAConfig } from "@/components/strategies/config/sma-crossover-config"
+import { RSIConfig } from "@/components/strategies/config/rsi-config"
+import { MACDConfig } from "@/components/strategies/config/macd-config"
+import {
+  apiClient,
+  StrategyType,
+  StrategyConfig,
+  BacktestResult,
+  BacktestEngineResult,
   BacktestRequest,
-  StrategyConfig
+  type DCAConfig as DCAConfigType,
+  type GridTradingConfig as GridConfigType,
+  type SMACrossoverConfig as SMAConfigType,
+  type RSIConfig as RSIConfigType,
+  type MACDConfig as MACDConfigType
 } from "@/lib/api"
 import { 
   getStrategyInfo, 
@@ -51,39 +43,299 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
-type ViewMode = 'overview' | 'create' | 'running' | 'results'
+type ViewMode = 'overview' | 'select' | 'configure' | 'running' | 'results'
 
 export default function BacktestingPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
+
+  // Helper function to map backend strategy name to frontend strategy type
+  const getStrategyTypeFromName = (strategyName: string): StrategyType => {
+    const nameToTypeMap: Record<string, StrategyType> = {
+      'dca_v2': 'dca',
+      'grid_trading_v2': 'grid_trading',
+      'sma_crossover_v2': 'sma_crossover',
+      'rsi_v1': 'rsi',
+      'macd_v1': 'macd'
+    }
+    return nameToTypeMap[strategyName] || 'dca' // fallback to dca if not found
+  }
+
+  // Helper function to check if result is from engine or database
+  const isBacktestEngineResult = (result: BacktestResult | BacktestEngineResult): result is BacktestEngineResult => {
+    return 'metrics' in result && 'trades' in result && 'performance_chart' in result
+  }
+
+  // Helper function to convert BacktestEngineResult to BacktestResult format for component compatibility
+  const convertEngineResultToDisplayFormat = (engineResult: BacktestEngineResult): BacktestResult & { equity_curve: any; trades_data: any } => {
+    const symbol = engineResult.config?.symbol || 'BTC'
+    const strategyName = engineResult.config?.strategy_name || 'dca_v2'
+    const interval = engineResult.config?.interval || '1d'
+    const startDate = engineResult.config?.start_date || new Date().toISOString()
+    const endDate = engineResult.config?.end_date || new Date().toISOString()
+    const initialBalance = engineResult.config?.initial_balance?.toString() || '10000'
+
+    return {
+      id: engineResult.backtest_id,
+      name: `${strategyName} on ${symbol}`,
+      description: `Backtest of ${strategyName} strategy`,
+      strategy_name: strategyName,
+      symbol: symbol,
+      interval: interval,
+      start_date: startDate,
+      end_date: endDate,
+      initial_balance: initialBalance,
+      final_balance: engineResult.metrics.final_portfolio_value,
+      total_return: engineResult.metrics.total_return,
+      total_return_percentage: engineResult.metrics.total_return_percentage,
+      max_drawdown: engineResult.metrics.max_drawdown,
+      max_drawdown_percentage: (parseFloat(engineResult.metrics.max_drawdown) / parseFloat(initialBalance) * 100).toString(),
+      sharpe_ratio: engineResult.metrics.sharpe_ratio,
+      total_trades: engineResult.metrics.total_trades,
+      winning_trades: engineResult.metrics.winning_trades,
+      losing_trades: engineResult.metrics.losing_trades,
+      win_rate: engineResult.metrics.win_rate,
+      profit_factor: engineResult.metrics.profit_factor,
+      largest_win: '0', // Not available in engine result
+      largest_loss: '0', // Not available in engine result
+      average_win: engineResult.metrics.average_win,
+      average_loss: engineResult.metrics.average_loss,
+      status: 'completed',
+      error_message: undefined,
+      execution_time_ms: engineResult.execution_time_ms,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      // Additional fields for compatibility
+      equity_curve: engineResult.performance_chart,
+      trades_data: engineResult.trades
+    }
+  }
   const [selectedStrategyType, setSelectedStrategyType] = useState<StrategyType>()
+  const [customDCAConfig, setCustomDCAConfig] = useState<DCAConfigType | null>(null)
+  const [customGridConfig, setCustomGridConfig] = useState<GridConfigType | null>(null)
+  const [customSMAConfig, setCustomSMAConfig] = useState<SMAConfigType | null>(null)
+  const [customRSIConfig, setCustomRSIConfig] = useState<RSIConfigType | null>(null)
+  const [customMACDConfig, setCustomMACDConfig] = useState<MACDConfigType | null>(null)
   const [backtestHistory, setBacktestHistory] = useState<BacktestResult[]>([])
-  const [currentBacktest, setCurrentBacktest] = useState<BacktestResult | null>(null)
+  const [currentBacktest, setCurrentBacktest] = useState<BacktestResult | BacktestEngineResult | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Memoized data and callbacks for strategy configs (must be outside conditionals)
+  const dcaInitialData = useMemo(() => ({
+    name: selectedStrategyType === 'dca' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
+    asset_symbol: 'BTC',
+    config: customDCAConfig || (selectedStrategyType === 'dca' ? DEFAULT_CONFIGS[selectedStrategyType] as DCAConfigType : {} as DCAConfigType)
+  }), [selectedStrategyType, customDCAConfig])
+
+  const gridInitialData = useMemo(() => ({
+    name: selectedStrategyType === 'grid_trading' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
+    asset_symbol: 'BTC',
+    config: customGridConfig || (selectedStrategyType === 'grid_trading' ? DEFAULT_CONFIGS[selectedStrategyType] as GridConfigType : {} as GridConfigType)
+  }), [selectedStrategyType, customGridConfig])
+
+  const smaInitialData = useMemo(() => ({
+    name: selectedStrategyType === 'sma_crossover' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
+    asset_symbol: 'BTC',
+    config: customSMAConfig || (selectedStrategyType === 'sma_crossover' ? DEFAULT_CONFIGS[selectedStrategyType] as SMAConfigType : {} as SMAConfigType)
+  }), [selectedStrategyType, customSMAConfig])
+
+  const rsiInitialData = useMemo(() => ({
+    name: selectedStrategyType === 'rsi' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
+    asset_symbol: 'BTC',
+    config: customRSIConfig || (selectedStrategyType === 'rsi' ? DEFAULT_CONFIGS[selectedStrategyType] as RSIConfigType : {} as RSIConfigType)
+  }), [selectedStrategyType, customRSIConfig])
+
+  const macdInitialData = useMemo(() => ({
+    name: selectedStrategyType === 'macd' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
+    asset_symbol: 'BTC',
+    config: customMACDConfig || (selectedStrategyType === 'macd' ? DEFAULT_CONFIGS[selectedStrategyType] as MACDConfigType : {} as MACDConfigType)
+  }), [selectedStrategyType, customMACDConfig])
+
+  const handleConfigSubmit = useCallback(async () => {
+    // This is for strategy creation, not backtesting
+    // We'll handle this in the onBacktest callback
+  }, [])
+
+  const handleConfigCancel = useCallback(() => setViewMode('select'), [])
+
+  const loadBacktestHistory = useCallback(async () => {
+    if (!isAuthenticated) return
+
+    setLoading(true)
+    try {
+      const response = await apiClient.getUserBacktests({ page: 1, limit: 50 })
+      setBacktestHistory(response.results || [])
+    } catch (error: unknown) {
+      console.error('Failed to load backtest history:', error)
+      // Check if it's a 500 error (backend not implemented)
+      if ((error as { status?: number }).status === 500 || (error as { message?: string }).message?.includes('500')) {
+        console.warn('Backtesting endpoints not yet implemented on backend')
+      }
+      setBacktestHistory([])
+    } finally {
+      setLoading(false)
+    }
+  }, [isAuthenticated])
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
       loadBacktestHistory()
-    }
-  }, [isAuthenticated, authLoading])
 
-  const loadBacktestHistory = async () => {
-    if (!isAuthenticated) return
-    
-    setLoading(true)
+      // Check if there's a pending strategy from the unified strategies page
+      const pendingStrategy = localStorage.getItem('pendingBacktestStrategy')
+      if (pendingStrategy) {
+        try {
+          const strategyData = JSON.parse(pendingStrategy)
+          setSelectedStrategyType(strategyData.type)
+
+          // Set the appropriate custom config based on strategy type
+          switch (strategyData.type) {
+            case 'dca':
+              setCustomDCAConfig(strategyData.config)
+              break
+            case 'grid_trading':
+              setCustomGridConfig(strategyData.config)
+              break
+            case 'sma_crossover':
+              setCustomSMAConfig(strategyData.config)
+              break
+            case 'rsi':
+              setCustomRSIConfig(strategyData.config)
+              break
+            case 'macd':
+              setCustomMACDConfig(strategyData.config)
+              break
+          }
+
+          setViewMode('configure')
+          localStorage.removeItem('pendingBacktestStrategy')
+        } catch (error) {
+          console.error('Error parsing pending strategy:', error)
+          localStorage.removeItem('pendingBacktestStrategy')
+        }
+      }
+    }
+  }, [isAuthenticated, authLoading, loadBacktestHistory])
+
+  const handleStrategySelect = (type: StrategyType, _config: StrategyConfig) => {
+    setSelectedStrategyType(type)
+    setViewMode('configure')
+  }
+
+  const handleConfigureStrategy = (type: StrategyType) => {
+    setSelectedStrategyType(type)
+    // Reset all custom configs
+    setCustomDCAConfig(null)
+    setCustomGridConfig(null)
+    setCustomSMAConfig(null)
+    setCustomRSIConfig(null)
+    setCustomMACDConfig(null)
+    setViewMode('configure')
+  }
+
+  const handleDCABacktest = async (config: DCAConfigType, name: string, assetSymbol: string) => {
+    setCustomDCAConfig(config)
+    setViewMode('running')
+
     try {
-      const history = await apiClient.getUserBacktests()
-      setBacktestHistory(history || [])
+      const request: BacktestRequest = {
+        strategy_type: 'dca',
+        asset_symbol: assetSymbol || 'BTC',
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
+        initial_capital: 10000,
+        config: config,
+        interval: '1d'
+      }
+      await handleRunBacktest(request)
     } catch (error) {
-      console.error('Failed to load backtest history:', error)
-    } finally {
-      setLoading(false)
+      console.error('DCA backtest failed:', error)
+      setViewMode('configure')
     }
   }
 
-  const handleStartBacktest = (type: StrategyType) => {
-    setSelectedStrategyType(type)
-    setViewMode('create')
+  const handleGridTradingBacktest = async (config: GridConfigType, name: string, assetSymbol: string) => {
+    setCustomGridConfig(config)
+    setViewMode('running')
+
+    try {
+      const request: BacktestRequest = {
+        strategy_type: 'grid_trading',
+        asset_symbol: assetSymbol || 'BTC',
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
+        initial_capital: 10000,
+        config: config,
+        interval: '1d'
+      }
+      await handleRunBacktest(request)
+    } catch (error) {
+      console.error('Grid trading backtest failed:', error)
+      setViewMode('configure')
+    }
+  }
+
+  const handleSMABacktest = async (config: SMAConfigType, name: string, assetSymbol: string) => {
+    setCustomSMAConfig(config)
+    setViewMode('running')
+
+    try {
+      const request: BacktestRequest = {
+        strategy_type: 'sma_crossover',
+        asset_symbol: assetSymbol || 'BTC',
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
+        initial_capital: 10000,
+        config: config,
+        interval: '1d'
+      }
+      await handleRunBacktest(request)
+    } catch (error) {
+      console.error('SMA crossover backtest failed:', error)
+      setViewMode('configure')
+    }
+  }
+
+  const handleRSIBacktest = async (config: RSIConfigType, name: string, assetSymbol: string) => {
+    setCustomRSIConfig(config)
+    setViewMode('running')
+
+    try {
+      const request: BacktestRequest = {
+        strategy_type: 'rsi',
+        asset_symbol: assetSymbol || 'BTC',
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
+        initial_capital: 10000,
+        config: config,
+        interval: '1d'
+      }
+      await handleRunBacktest(request)
+    } catch (error) {
+      console.error('RSI backtest failed:', error)
+      setViewMode('configure')
+    }
+  }
+
+  const handleMACDBacktest = async (config: MACDConfigType, name: string, assetSymbol: string) => {
+    setCustomMACDConfig(config)
+    setViewMode('running')
+
+    try {
+      const request: BacktestRequest = {
+        strategy_type: 'macd',
+        asset_symbol: assetSymbol || 'BTC',
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
+        initial_capital: 10000,
+        config: config,
+        interval: '1d'
+      }
+      await handleRunBacktest(request)
+    } catch (error) {
+      console.error('MACD backtest failed:', error)
+      setViewMode('configure')
+    }
   }
 
   const handleRunBacktest = async (request: BacktestRequest) => {
@@ -95,7 +347,7 @@ export default function BacktestingPage() {
       await loadBacktestHistory() // Refresh history
     } catch (error) {
       console.error('Backtest failed:', error)
-      setViewMode('create')
+      setViewMode('configure')
     }
   }
 
@@ -110,13 +362,6 @@ export default function BacktestingPage() {
     }
   }
 
-  const getPerformanceColor = (returnPercentage: string) => {
-    const value = parseFloat(returnPercentage)
-    if (value >= 20) return 'text-green-400'
-    if (value >= 10) return 'text-blue-400'
-    if (value >= 0) return 'text-yellow-400'
-    return 'text-red-400'
-  }
 
   const getPerformanceRating = (returnPercentage: string, sharpeRatio: string) => {
     const returns = parseFloat(returnPercentage)
@@ -176,7 +421,7 @@ export default function BacktestingPage() {
             </Button>
             
             <Button
-              onClick={() => setViewMode('create')}
+              onClick={() => setViewMode('select')}
               className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
             >
               <TestTube className="h-4 w-4 mr-2" />
@@ -188,7 +433,7 @@ export default function BacktestingPage() {
         {viewMode === 'overview' && (
           <>
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 max-w-6xl mx-auto">
               <Card className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 backdrop-blur-xl border border-white/10">
                 <div className="absolute inset-0 bg-white/5 backdrop-blur-sm rounded-lg" />
                 <CardContent className="relative z-10 p-6">
@@ -255,7 +500,7 @@ export default function BacktestingPage() {
             </div>
 
             {/* Recent Backtests */}
-            <Card className="bg-white/5 backdrop-blur-xl border border-white/10">
+            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 max-w-7xl mx-auto">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -267,7 +512,7 @@ export default function BacktestingPage() {
                     </CardDescription>
                   </div>
                   <Button
-                    onClick={() => setViewMode('create')}
+                    onClick={() => setViewMode('select')}
                     size="sm"
                     className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
                   >
@@ -290,7 +535,7 @@ export default function BacktestingPage() {
                       Start testing strategies with historical data to see how they would have performed
                     </p>
                     <Button
-                      onClick={() => setViewMode('create')}
+                      onClick={() => setViewMode('select')}
                       className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500"
                     >
                       <TestTube className="h-4 w-4 mr-2" />
@@ -300,15 +545,17 @@ export default function BacktestingPage() {
                 ) : (
                   <div className="space-y-4">
                     {backtestHistory.slice(0, 10).map((backtest) => {
-                      const strategyInfo = getStrategyInfo(backtest.strategy_type)
-                      const performance = getPerformanceRating(backtest.total_return_percentage, backtest.sharpe_ratio)
+                      const strategyType = getStrategyTypeFromName(backtest.strategy_name)
+                      const strategyInfo = getStrategyInfo(strategyType)
+                      const performance = getPerformanceRating(backtest.total_return_percentage, backtest.sharpe_ratio || '0')
                       const isProfit = parseFloat(backtest.total_return_percentage) >= 0
                       
                       return (
-                        <Card 
+                        <Card
                           key={backtest.id}
                           className={cn(
                             "bg-gradient-to-r backdrop-blur-sm border border-white/10 cursor-pointer transition-all hover:scale-[1.01]",
+                            "min-h-[120px]", // Increased height for better readability
                             strategyInfo.color
                           )}
                           onClick={() => {
@@ -322,7 +569,7 @@ export default function BacktestingPage() {
                                 <div className="text-2xl">{strategyInfo.icon}</div>
                                 <div>
                                   <h4 className="font-semibold text-white/90">
-                                    {strategyInfo.name} • {backtest.asset_symbol}
+                                    {strategyInfo.name} • {backtest.symbol}
                                   </h4>
                                   <div className="flex items-center space-x-3 text-sm text-white/60">
                                     <span>{new Date(backtest.start_date).toLocaleDateString()} - {new Date(backtest.end_date).toLocaleDateString()}</span>
@@ -369,24 +616,83 @@ export default function BacktestingPage() {
           </>
         )}
 
-        {viewMode === 'create' && (
+        {viewMode === 'select' && (
+          <div className="space-y-8">
+            <StrategyBacktestSelector
+              selectedType={selectedStrategyType}
+              onStrategySelect={handleStrategySelect}
+              onConfigureStrategy={handleConfigureStrategy}
+              className="max-w-7xl mx-auto"
+            />
+          </div>
+        )}
+
+        {viewMode === 'configure' && selectedStrategyType && (
           <div className="space-y-6">
-            <Card className="bg-white/5 backdrop-blur-xl border border-white/10">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold text-white/90">
-                  Choose Strategy to Backtest
-                </CardTitle>
-                <CardDescription className="text-white/60">
-                  Select a strategy type and we'll guide you through the configuration
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <StrategyTypeSelector
-                  onTypeSelect={handleStartBacktest}
-                  className="max-w-4xl mx-auto"
+            <div className="flex items-center space-x-4">
+              <Button
+                onClick={() => setViewMode('select')}
+                variant="outline"
+                className="border-white/20 text-white/80 hover:bg-white/10"
+              >
+                ← Back to Strategy Selection
+              </Button>
+              <h2 className="text-xl font-bold text-white/90">
+                Configure {getStrategyInfo(selectedStrategyType).name} Strategy
+              </h2>
+            </div>
+
+            <div className="max-w-6xl mx-auto">
+              {selectedStrategyType === 'dca' && (
+                <DCAConfig
+                  initialData={dcaInitialData}
+                  onSubmit={handleConfigSubmit}
+                  onCancel={handleConfigCancel}
+                  onBacktest={handleDCABacktest}
+                  className="w-full"
                 />
-              </CardContent>
-            </Card>
+              )}
+
+              {selectedStrategyType === 'grid_trading' && (
+                <GridTradingConfig
+                  initialData={gridInitialData}
+                  onSubmit={handleConfigSubmit}
+                  onCancel={handleConfigCancel}
+                  onBacktest={handleGridTradingBacktest}
+                  className="w-full"
+                />
+              )}
+
+              {selectedStrategyType === 'sma_crossover' && (
+                <SMAConfig
+                  initialData={smaInitialData}
+                  onSubmit={handleConfigSubmit}
+                  onCancel={handleConfigCancel}
+                  onBacktest={handleSMABacktest}
+                  className="w-full"
+                />
+              )}
+
+              {selectedStrategyType === 'rsi' && (
+                <RSIConfig
+                  initialData={rsiInitialData}
+                  onSubmit={handleConfigSubmit}
+                  onCancel={handleConfigCancel}
+                  onBacktest={handleRSIBacktest}
+                  className="w-full"
+                />
+              )}
+
+              {selectedStrategyType === 'macd' && (
+                <MACDConfig
+                  initialData={macdInitialData}
+                  onSubmit={handleConfigSubmit}
+                  onCancel={handleConfigCancel}
+                  onBacktest={handleMACDBacktest}
+                  className="w-full"
+                />
+              )}
+            </div>
           </div>
         )}
 
@@ -411,7 +717,7 @@ export default function BacktestingPage() {
         )}
 
         {viewMode === 'results' && currentBacktest && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-7xl mx-auto">
             <div className="flex items-center space-x-4">
               <Button
                 onClick={() => setViewMode('overview')}
@@ -421,20 +727,33 @@ export default function BacktestingPage() {
                 ← Back to Overview
               </Button>
               <h2 className="text-xl font-bold text-white/90">
-                Backtest Results: {getStrategyInfo(currentBacktest.strategy_type).name}
+                Backtest Results: {getStrategyInfo(getStrategyTypeFromName(
+                  isBacktestEngineResult(currentBacktest)
+                    ? currentBacktest.config?.strategy_name || 'dca_v2'
+                    : currentBacktest.strategy_name
+                )).name}
               </h2>
             </div>
-            
-            <BacktestResults 
-              results={currentBacktest}
-              strategyInfo={getStrategyInfo(currentBacktest.strategy_type)}
+
+            <BacktestResults
+              results={
+                isBacktestEngineResult(currentBacktest)
+                  ? convertEngineResultToDisplayFormat(currentBacktest)
+                  : currentBacktest
+              }
+              strategyInfo={getStrategyInfo(getStrategyTypeFromName(
+                isBacktestEngineResult(currentBacktest)
+                  ? currentBacktest.config?.strategy_name || 'dca_v2'
+                  : currentBacktest.strategy_name
+              ))}
+              className="w-full"
             />
           </div>
         )}
 
         {/* Strategy Quick Start */}
         {viewMode === 'overview' && backtestHistory.length === 0 && (
-          <Card className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 backdrop-blur-xl border border-white/10">
+          <Card className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 backdrop-blur-xl border border-white/10 max-w-6xl mx-auto">
             <div className="absolute inset-0 bg-white/5 backdrop-blur-sm rounded-lg" />
             <div className="relative z-10">
               <CardHeader className="text-center space-y-4">
@@ -449,8 +768,8 @@ export default function BacktestingPage() {
               </CardHeader>
 
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-white/5 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                  <div className="text-center p-6 bg-white/5 rounded-lg border border-white/10">
                     <BarChart3 className="h-8 w-8 text-blue-400 mx-auto mb-2" />
                     <h4 className="font-semibold text-white/90">Performance Metrics</h4>
                     <p className="text-sm text-white/60">
@@ -458,7 +777,7 @@ export default function BacktestingPage() {
                     </p>
                   </div>
                   
-                  <div className="text-center p-4 bg-white/5 rounded-lg">
+                  <div className="text-center p-6 bg-white/5 rounded-lg border border-white/10">
                     <Calendar className="h-8 w-8 text-cyan-400 mx-auto mb-2" />
                     <h4 className="font-semibold text-white/90">Historical Data</h4>
                     <p className="text-sm text-white/60">
@@ -466,7 +785,7 @@ export default function BacktestingPage() {
                     </p>
                   </div>
                   
-                  <div className="text-center p-4 bg-white/5 rounded-lg">
+                  <div className="text-center p-6 bg-white/5 rounded-lg border border-white/10">
                     <Target className="h-8 w-8 text-purple-400 mx-auto mb-2" />
                     <h4 className="font-semibold text-white/90">Risk Analysis</h4>
                     <p className="text-sm text-white/60">
@@ -477,7 +796,7 @@ export default function BacktestingPage() {
 
                 <div className="text-center">
                   <Button
-                    onClick={() => setViewMode('create')}
+                    onClick={() => setViewMode('select')}
                     size="lg"
                     className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white"
                   >

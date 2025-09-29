@@ -7,6 +7,8 @@ pub mod rsi_strategy;
 pub mod macd_strategy;
 pub mod sma_crossover_strategy;
 pub mod grid_trading_strategy;
+pub mod backtest_result;
 
 pub use user::*;
 pub use user_profile::*;
+pub use backtest_result::*;

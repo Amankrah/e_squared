@@ -83,54 +83,89 @@ export default function Dashboard() {
 
     try {
       setLoading(true)
-      const [allStrategiesRes, connectionsRes] = await Promise.all([
-        apiClient.getAllStrategies().catch(() => ({
-          dca: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          gridTrading: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          smaCrossover: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          rsi: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 },
-          macd: { strategies: [], total_allocation: "0", total_invested: "0", total_profit_loss: "0", active_strategies: 0 }
+
+      // STEP 1: Get lightweight summary of user's strategy types
+      const [strategySummary, connectionsRes] = await Promise.all([
+        apiClient.getUserStrategySummary().catch(() => ({
+          authenticated: false,
+          strategy_types: [],
+          total_strategies: 0,
+          total_active: 0
         })),
         apiClient.getExchangeConnections().catch(() => ({ connections: [], message: '' }))
       ])
 
+      setConnections(connectionsRes.connections || [])
+
+      // If user has no strategies, return early with empty data
+      if (!strategySummary.authenticated || strategySummary.total_strategies === 0) {
+        setAllStrategies({
+          dca: [],
+          gridTrading: [],
+          smaCrossover: [],
+          rsi: [],
+          macd: []
+        })
+        setStrategies([])
+        setSummary({
+          total_allocation: "0",
+          total_invested: "0",
+          total_profit_loss: "0",
+          active_strategies: 0,
+          total_strategies: 0,
+          strategy_breakdown: {
+            dca: 0,
+            grid_trading: 0,
+            sma_crossover: 0,
+            rsi: 0,
+            macd: 0
+          }
+        })
+        return
+      }
+
+      // STEP 2: Only load strategy data for types the user actually has
+      const activeStrategyTypes = strategySummary.strategy_types.map(st => st.strategy_type)
+      console.log('Loading strategies for types:', activeStrategyTypes)
+
+      const strategiesData = await apiClient.getStrategiesByTypes(activeStrategyTypes).catch(() => ({}))
+
       // Set individual strategy collections
       setAllStrategies({
-        dca: allStrategiesRes.dca.strategies || [],
-        gridTrading: allStrategiesRes.gridTrading.strategies || [],
-        smaCrossover: allStrategiesRes.smaCrossover.strategies || [],
-        rsi: allStrategiesRes.rsi.strategies || [],
-        macd: allStrategiesRes.macd.strategies || []
+        dca: strategiesData.dca?.strategies || [],
+        gridTrading: strategiesData.gridTrading?.strategies || [],
+        smaCrossover: strategiesData.smaCrossover?.strategies || [],
+        rsi: strategiesData.rsi?.strategies || [],
+        macd: strategiesData.macd?.strategies || []
       })
-      
+
       // Keep DCA strategies for backward compatibility
-      setStrategies(allStrategiesRes.dca.strategies || [])
-      setConnections(connectionsRes.connections || [])
-      
-      // Calculate combined summary statistics
-      const allResults = [
-        allStrategiesRes.dca,
-        allStrategiesRes.gridTrading,
-        allStrategiesRes.smaCrossover,
-        allStrategiesRes.rsi,
-        allStrategiesRes.macd
-      ]
-      
+      setStrategies(strategiesData.dca?.strategies || [])
+
+      // Calculate combined summary statistics from loaded data
+      const loadedResults = [
+        strategiesData.dca,
+        strategiesData.gridTrading,
+        strategiesData.smaCrossover,
+        strategiesData.rsi,
+        strategiesData.macd
+      ].filter(Boolean) // Remove undefined entries
+
       const combinedSummary = {
-        total_allocation: allResults.reduce((sum, res) => sum + parseFloat(res.total_allocation || '0'), 0).toString(),
-        total_invested: allResults.reduce((sum, res) => sum + parseFloat(res.total_invested || '0'), 0).toString(),
-        total_profit_loss: allResults.reduce((sum, res) => sum + parseFloat(res.total_profit_loss || '0'), 0).toString(),
-        active_strategies: allResults.reduce((sum, res) => sum + (res.active_strategies || 0), 0),
-        total_strategies: allResults.reduce((sum, res) => sum + (res.strategies?.length || 0), 0),
+        total_allocation: loadedResults.reduce((sum, res) => sum + parseFloat(res?.total_allocation || '0'), 0).toString(),
+        total_invested: loadedResults.reduce((sum, res) => sum + parseFloat(res?.total_invested || '0'), 0).toString(),
+        total_profit_loss: loadedResults.reduce((sum, res) => sum + parseFloat(res?.total_profit_loss || '0'), 0).toString(),
+        active_strategies: loadedResults.reduce((sum, res) => sum + (res?.active_strategies || 0), 0),
+        total_strategies: loadedResults.reduce((sum, res) => sum + (res?.strategies?.length || 0), 0),
         strategy_breakdown: {
-          dca: allStrategiesRes.dca.strategies?.length || 0,
-          grid_trading: allStrategiesRes.gridTrading.strategies?.length || 0,
-          sma_crossover: allStrategiesRes.smaCrossover.strategies?.length || 0,
-          rsi: allStrategiesRes.rsi.strategies?.length || 0,
-          macd: allStrategiesRes.macd.strategies?.length || 0
+          dca: strategiesData.dca?.strategies?.length || 0,
+          grid_trading: strategiesData.gridTrading?.strategies?.length || 0,
+          sma_crossover: strategiesData.smaCrossover?.strategies?.length || 0,
+          rsi: strategiesData.rsi?.strategies?.length || 0,
+          macd: strategiesData.macd?.strategies?.length || 0
         }
       }
-      
+
       setSummary(combinedSummary)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
