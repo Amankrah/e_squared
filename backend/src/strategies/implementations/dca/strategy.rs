@@ -179,14 +179,20 @@ impl DCAStrategy {
         let mut reasons = Vec::new();
         let mut market_conditions = MarketConditions::default();
 
+        debug!("DCA strategy_type: {:?}", config.strategy_type);
+
         match config.strategy_type {
             DCAType::Simple => {
                 reasons.push("Simple DCA".to_string());
             }
 
             DCAType::RSIBased => {
+                debug!("RSI-based DCA selected, rsi_config present: {}", config.rsi_config.is_some());
                 if let Some(ref rsi_config) = config.rsi_config {
                     multiplier = self.calculate_rsi_multiplier(context, rsi_config, &mut market_conditions, &mut reasons)?;
+                } else {
+                    warn!("RSIBased strategy selected but no rsi_config provided, using default multiplier");
+                    reasons.push("RSI-based (no config)".to_string());
                 }
             }
 
@@ -555,20 +561,26 @@ impl Strategy for DCAStrategy {
         _mode: StrategyMode,
         _context: &StrategyContext,
     ) -> Result<(), AppError> {
+        info!("DCA initialize parameters: {}", serde_json::to_string_pretty(parameters).unwrap_or_default());
+
         let config: DCAConfig = serde_json::from_value(parameters.clone())
-            .map_err(|e| AppError::BadRequest(format!("Invalid DCA parameters: {}", e)))?;
+            .map_err(|e| {
+                warn!("Failed to deserialize DCA config: {}", e);
+                AppError::BadRequest(format!("Invalid DCA parameters: {}", e))
+            })?;
 
         // Validate configuration
         config.validate()
             .map_err(|e| AppError::BadRequest(e))?;
 
-        self.config = Some(config);
+        self.config = Some(config.clone());
         self.state = DCAState::default();
         self.execution_history.clear();
         self.is_paused = false;
         self.last_signal_reason = "Strategy initialized".to_string();
 
-        info!("DCA strategy initialized successfully");
+        info!("DCA strategy initialized successfully with type: {:?}, has RSI config: {}",
+              config.strategy_type, config.rsi_config.is_some());
         Ok(())
     }
 
@@ -590,7 +602,7 @@ impl Strategy for DCAStrategy {
         // Capture market conditions for signal metadata
         let market_conditions = self.capture_market_conditions(context);
 
-        info!("DCA signal generated: {} {} at {} (reason: {})",
+        info!("DCA signal generated: ${} worth of {} at ${} (reason: {})",
               amount, context.symbol, context.current_price, self.last_signal_reason);
 
         // Create signal with enhanced metadata

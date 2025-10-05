@@ -613,6 +613,7 @@ export interface BacktestResult {
   name: string
   description?: string
   strategy_name: string
+  strategy_type?: string  // Sub-strategy type (e.g., "Simple", "RSIBased", "VolatilityBased" for DCA)
   symbol: string
   interval: string
   start_date: string
@@ -668,6 +669,7 @@ export interface BacktestEngineMetrics {
   benchmark_return?: string
   alpha?: string
   beta?: string
+  total_invested: string
 }
 
 export interface PerformancePoint {
@@ -1443,7 +1445,11 @@ class ApiClient {
   private transformDCAConfig(config: any): DCAConfig {
     // Handle different frequency formats
     let frequency: DCAFrequency
-    if (config.dca_interval_hours) {
+    if (config.frequency) {
+      // Already in correct format
+      frequency = config.frequency
+    } else if (config.dca_interval_hours) {
+      // Old format - convert to new format
       if (config.dca_interval_hours === 24) {
         frequency = { Daily: 1 }
       } else if (config.dca_interval_hours === 168) {
@@ -1462,23 +1468,29 @@ class ApiClient {
     switch (config.strategy_type) {
       case 'conservative':
       case 'simple':
+      case 'Simple':
         strategyType = 'Simple'
         break
       case 'rsi_based':
       case 'aggressive':
+      case 'RSIBased':
         strategyType = 'RSIBased'
         break
       case 'volatility_based':
+      case 'VolatilityBased':
         strategyType = 'VolatilityBased'
         break
       case 'dynamic':
       case 'moderate':
+      case 'Dynamic':
         strategyType = 'Dynamic'
         break
       case 'dip_buying':
+      case 'DipBuying':
         strategyType = 'DipBuying'
         break
       case 'sentiment_based':
+      case 'SentimentBased':
         strategyType = 'SentimentBased'
         break
       default:
@@ -1504,7 +1516,10 @@ class ApiClient {
     }
 
     // Add optional configurations based on strategy type and frontend config
-    if (config.sentiment_multiplier || config.fear_greed_threshold_buy || config.fear_greed_threshold_sell) {
+    // Use existing config if already in correct format, otherwise build from old format
+    if (config.sentiment_config) {
+      dcaConfig.sentiment_config = config.sentiment_config
+    } else if (config.sentiment_multiplier || config.fear_greed_threshold_buy || config.fear_greed_threshold_sell) {
       dcaConfig.sentiment_config = {
         fear_greed_threshold: config.fear_greed_threshold_buy,
         bearish_multiplier: config.fear_multiplier || 1.5,
@@ -1512,7 +1527,10 @@ class ApiClient {
       }
     }
 
-    if (config.volatility_adjustment || strategyType === 'VolatilityBased' || strategyType === 'Dynamic') {
+    if (config.volatility_config) {
+      dcaConfig.volatility_config = config.volatility_config
+      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold
+    } else if (config.volatility_adjustment || strategyType === 'VolatilityBased' || strategyType === 'Dynamic') {
       dcaConfig.volatility_config = {
         period: config.volatility_period || 20,
         low_threshold: config.volatility_low_threshold || 10,
@@ -1524,7 +1542,9 @@ class ApiClient {
       dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold
     }
 
-    if (strategyType === 'RSIBased' || strategyType === 'Dynamic') {
+    if (config.rsi_config) {
+      dcaConfig.rsi_config = config.rsi_config
+    } else if (strategyType === 'RSIBased' || strategyType === 'Dynamic') {
       dcaConfig.rsi_config = {
         period: config.rsi_period || 14,
         oversold_threshold: config.rsi_oversold || 30,
@@ -1535,7 +1555,9 @@ class ApiClient {
       } as DCARSIConfig
     }
 
-    if (strategyType === 'Dynamic') {
+    if (config.dynamic_factors) {
+      dcaConfig.dynamic_factors = config.dynamic_factors
+    } else if (strategyType === 'Dynamic') {
       dcaConfig.dynamic_factors = {
         rsi_weight: config.rsi_weight || 0.3,
         volatility_weight: config.volatility_weight || 0.3,
@@ -1546,12 +1568,17 @@ class ApiClient {
       }
     }
 
-    if (strategyType === 'DipBuying' && config.dip_levels) {
-      dcaConfig.dip_levels = config.dip_levels.map((level: any) => ({
-        price_drop_percentage: level.price_drop_percentage || level.drop_percentage,
-        amount_multiplier: level.amount_multiplier || level.multiplier,
-        max_triggers: level.max_triggers
-      }))
+    if (config.dip_levels) {
+      dcaConfig.dip_levels = config.dip_levels
+      dcaConfig.reference_price = config.reference_price
+      dcaConfig.reference_period_days = config.reference_period_days
+    } else if (strategyType === 'DipBuying') {
+      // Provide default dip levels if not specified
+      dcaConfig.dip_levels = [
+        { price_drop_percentage: 5, amount_multiplier: 1.5, max_triggers: undefined },
+        { price_drop_percentage: 10, amount_multiplier: 2.0, max_triggers: undefined },
+        { price_drop_percentage: 20, amount_multiplier: 3.0, max_triggers: undefined }
+      ]
       dcaConfig.reference_price = config.reference_price
       dcaConfig.reference_period_days = config.reference_period_days || 30
     }

@@ -8,6 +8,7 @@ use chrono::Utc;
 use crate::backtesting::types::*;
 use crate::backtesting::binance_fetcher::BinanceFetcher;
 use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData};
+use crate::strategies::core::traits::{OrderUpdate, OrderStatus, OrderType as TraitsOrderType};
 use crate::exchange_connectors::{Kline};
 use crate::utils::errors::AppError;
 
@@ -109,14 +110,19 @@ impl BacktestEngine {
             ));
         }
 
-        // Check if time range is not too large (e.g., max 1 year)
-        let max_days = 365;
+        // Check if time range is reasonable (max 5 years to prevent excessive API calls)
+        let max_days = 1825; // ~5 years
         let days_diff = (config.end_time - config.start_time).num_days();
         if days_diff > max_days {
             return Err(AppError::BadRequest(format!(
-                "Time range too large. Maximum {} days allowed",
+                "Time range too large. Maximum {} days (~5 years) allowed",
                 max_days
             )));
+        }
+
+        // Warn if using very long timeframes with small intervals
+        if days_diff > 730 && config.interval.as_str() == "1h" {
+            warn!("Long backtest period ({} days) with 1h interval may be slow", days_diff);
         }
 
         // Validate initial balance
@@ -199,7 +205,10 @@ impl BacktestEngine {
                     &mut portfolio,
                     &mut position_tracker,
                     "Strategy signal".to_string(),
-                ) {
+                    strategy,
+                    &config.symbol,
+                    &config,
+                ).await {
                     trades.push(trade);
                 }
             }
@@ -234,13 +243,16 @@ impl BacktestEngine {
     }
 
     /// Execute a trading signal
-    fn execute_signal(
+    async fn execute_signal(
         &self,
         signal: StrategySignal,
         kline: &Kline,
         portfolio: &mut Portfolio,
         position_tracker: &mut PositionTracker,
         reason: String,
+        strategy: &mut dyn Strategy,
+        symbol: &str,
+        backtest_config: &BacktestConfig,
     ) -> Option<BacktestTrade> {
         match signal.signal_type {
             StrategySignalType::Enter => {
@@ -260,6 +272,19 @@ impl BacktestEngine {
                 if portfolio.execute_buy(kline.close, quantity) {
                     position_tracker.open_position(kline.close, quantity);
 
+                    // Notify strategy about order execution
+                    let order_update = OrderUpdate {
+                        order_id: Uuid::new_v4().to_string(),
+                        symbol: symbol.to_string(),
+                        order_type: TraitsOrderType::Market,
+                        status: OrderStatus::Filled,
+                        quantity,
+                        price: Some(kline.close),
+                        filled_quantity: quantity,
+                        timestamp: kline.close_time,
+                    };
+                    let _ = strategy.on_order_update(&order_update).await;
+
                     let trade = BacktestTrade {
                         timestamp: kline.close_time,
                         trade_type: TradeType::Buy,
@@ -277,6 +302,64 @@ impl BacktestEngine {
                     Some(trade)
                 } else {
                     warn!("Failed to execute buy - insufficient balance");
+                    None
+                }
+            }
+            StrategySignalType::AddToPosition => {
+                // DCA-style accumulation - buy regardless of current position
+                let amount = match &signal.action.quantity {
+                    QuantityType::DollarAmount(amt) => *amt,
+                    QuantityType::Fixed(qty) => *qty * kline.close,
+                    QuantityType::BalancePercentage(pct) => portfolio.cash_balance * pct / Decimal::from(100),
+                    _ => Decimal::from(100), // Default amount
+                };
+
+                let quantity = amount / kline.close;
+                debug!("DCA buy attempt: amount=${}, price={}, quantity={}, cash_balance={}",
+                       amount, kline.close, quantity, portfolio.cash_balance);
+
+                // For DCA strategies, use unlimited capital mode
+                let buy_success = if backtest_config.unlimited_capital || backtest_config.strategy_name.contains("dca") {
+                    portfolio.execute_buy_with_injection(kline.close, quantity);
+                    true
+                } else {
+                    portfolio.execute_buy(kline.close, quantity)
+                };
+
+                if buy_success {
+                    // Update position tracker with new average entry price
+                    position_tracker.add_to_position(kline.close, quantity);
+
+                    // Notify strategy about order execution
+                    let order_update = OrderUpdate {
+                        order_id: Uuid::new_v4().to_string(),
+                        symbol: symbol.to_string(),
+                        order_type: TraitsOrderType::Market,
+                        status: OrderStatus::Filled,
+                        quantity,
+                        price: Some(kline.close),
+                        filled_quantity: quantity,
+                        timestamp: kline.close_time,
+                    };
+                    let _ = strategy.on_order_update(&order_update).await;
+
+                    let trade = BacktestTrade {
+                        timestamp: kline.close_time,
+                        trade_type: TradeType::Buy,
+                        price: kline.close,
+                        quantity,
+                        total_value: amount,
+                        portfolio_value: portfolio.total_value,
+                        balance_remaining: portfolio.cash_balance,
+                        reason,
+                        pnl: None,
+                        pnl_percentage: None,
+                    };
+
+                    debug!("Executed DCA BUY: {} @ {} (total position: {})", quantity, kline.close, position_tracker.entry_quantity);
+                    Some(trade)
+                } else {
+                    warn!("Failed to execute DCA buy - insufficient balance");
                     None
                 }
             }
@@ -323,7 +406,7 @@ impl BacktestEngine {
                 }
             }
             _ => {
-                // Handle other signal types (AddToPosition, ReducePosition, etc.)
+                // Handle other signal types (ReducePosition, etc.)
                 debug!("Ignoring unsupported signal type: {:?}", signal.signal_type);
                 None
             }
@@ -419,24 +502,33 @@ impl BacktestEngine {
     ) -> BacktestMetrics {
         let final_value = portfolio.total_value;
         let initial_value = portfolio.initial_value;
+        let total_invested = portfolio.total_invested;
 
-        // Basic returns
-        let total_return = final_value - initial_value;
-        let total_return_percentage = if initial_value > Decimal::ZERO {
-            (total_return / initial_value) * Decimal::from(100)
+        // Basic returns - for DCA, calculate based on total invested
+        let base_amount = if total_invested > Decimal::ZERO {
+            total_invested
+        } else {
+            initial_value
+        };
+
+        let total_return = final_value - base_amount;
+        let total_return_percentage = if base_amount > Decimal::ZERO {
+            (total_return / base_amount) * Decimal::from(100)
         } else {
             Decimal::ZERO
         };
 
-        // Trade statistics
+        // Trade statistics - count all trades but only sell trades for win/loss
         let total_trades = trades.len() as u32;
         let mut winning_trades = 0u32;
         let mut losing_trades = 0u32;
         let mut total_wins = Decimal::ZERO;
         let mut total_losses = Decimal::ZERO;
+        let mut closed_trades = 0u32; // Trades with realized P&L (sells)
 
         for trade in trades {
             if let Some(pnl) = trade.pnl {
+                closed_trades += 1;
                 if pnl > Decimal::ZERO {
                     winning_trades += 1;
                     total_wins += pnl;
@@ -447,8 +539,9 @@ impl BacktestEngine {
             }
         }
 
-        let win_rate = if total_trades > 0 {
-            Decimal::from(winning_trades) / Decimal::from(total_trades) * Decimal::from(100)
+        // Win rate should be based on closed trades (sells) only, not all trades
+        let win_rate = if closed_trades > 0 {
+            Decimal::from(winning_trades) / Decimal::from(closed_trades) * Decimal::from(100)
         } else {
             Decimal::ZERO
         };
@@ -527,6 +620,7 @@ impl BacktestEngine {
             benchmark_return,
             alpha: None, // Can be calculated if needed
             beta: None,  // Can be calculated if needed
+            total_invested,
         }
     }
 
@@ -661,6 +755,22 @@ impl PositionTracker {
         self.entry_price = price;
         self.entry_quantity = quantity;
         self.is_open = true;
+    }
+
+    fn add_to_position(&mut self, price: Decimal, quantity: Decimal) {
+        if !self.is_open {
+            // If no position exists, treat as opening position
+            self.open_position(price, quantity);
+        } else {
+            // Calculate new average entry price
+            let total_cost = (self.entry_price * self.entry_quantity) + (price * quantity);
+            let total_quantity = self.entry_quantity + quantity;
+
+            if total_quantity > Decimal::ZERO {
+                self.entry_price = total_cost / total_quantity;
+                self.entry_quantity = total_quantity;
+            }
+        }
     }
 
     fn close_position(&mut self, exit_price: Decimal, quantity: Decimal) -> (Option<Decimal>, Option<Decimal>) {

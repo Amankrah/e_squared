@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -77,13 +77,29 @@ interface DCAFormData {
   allowed_hours?: number[]
   allowed_weekdays?: number[]
   max_executions_per_day?: number
+
+  // Backtest Configuration
+  backtest_start_date?: string
+  backtest_end_date?: string
+  backtest_interval?: '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w'
+  backtest_initial_capital?: number
 }
 
 interface DCAConfigProps {
   initialData?: Partial<CreateDCAStrategyRequest>
   onSubmit: (data: CreateDCAStrategyRequest) => Promise<void>
   onCancel: () => void
-  onBacktest?: (config: DCAConfig, name: string, assetSymbol: string) => void
+  onBacktest?: (
+    config: DCAConfig,
+    name: string,
+    assetSymbol: string,
+    backtestParams: {
+      start_date: string
+      end_date: string
+      interval: string
+      initial_capital: number
+    }
+  ) => void
   isLoading?: boolean
   className?: string
 }
@@ -102,15 +118,9 @@ export function DCAConfigComponent({
     return {
       name: initialData?.name || '',
       asset_symbol: initialData?.asset_symbol || '',
-      base_amount: config?.base_amount || 1000,
+      base_amount: config?.base_amount || 100,
       strategy_type: config?.strategy_type || 'Simple',
-      frequency_type: config?.frequency?.Daily ? 'daily' :
-                     config?.frequency?.Weekly ? 'weekly' :
-                     config?.frequency?.Hourly ? 'hourly' :
-                     config?.frequency?.Monthly ? 'monthly' : 'custom',
-      frequency_value: config?.frequency?.Daily || config?.frequency?.Weekly ||
-                      config?.frequency?.Hourly || config?.frequency?.Monthly ||
-                      config?.frequency?.Custom || 1,
+      // Note: Frequency is now auto-derived from backtest_interval
 
       // Simple options
       sentiment_multiplier: !!config?.sentiment_config,
@@ -151,13 +161,53 @@ export function DCAConfigComponent({
       // Filters
       allowed_hours: config?.filters?.allowed_hours,
       allowed_weekdays: config?.filters?.allowed_weekdays,
-      max_executions_per_day: config?.filters?.max_executions_per_day
+      max_executions_per_day: config?.filters?.max_executions_per_day,
+
+      // Backtest Configuration - Default to 11 months (335 days to stay under 365 day limit)
+      backtest_start_date: new Date(Date.now() - 335 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      backtest_end_date: new Date().toISOString().split('T')[0],
+      backtest_interval: '1d',
+      backtest_initial_capital: 10000
     }
   }
 
   const [formData, setFormData] = useState<DCAFormData>(initializeFormData)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState("simple")
+
+  // Determine which tabs are relevant based on strategy type
+  const relevantTabs = useMemo(() => {
+    const base = { simple: true, risk: true, filters: true, advanced: false }
+
+    // Advanced tab only for complex strategies
+    if (['RSIBased', 'VolatilityBased', 'SentimentBased', 'Dynamic', 'DipBuying'].includes(formData.strategy_type)) {
+      base.advanced = true
+    }
+
+    return base
+  }, [formData.strategy_type])
+
+  // Auto-enable features and switch tabs based on strategy type
+  useEffect(() => {
+    if (formData.strategy_type === 'RSIBased') {
+      setFormData(prev => ({ ...prev, enable_rsi: true }))
+      if (activeTab === 'simple') setActiveTab('advanced')
+    }
+    if (formData.strategy_type === 'VolatilityBased') {
+      setFormData(prev => ({ ...prev, volatility_adjustment: true }))
+      if (activeTab === 'simple') setActiveTab('advanced')
+    }
+    if (formData.strategy_type === 'SentimentBased') {
+      setFormData(prev => ({ ...prev, sentiment_multiplier: true }))
+      if (activeTab === 'simple') setActiveTab('advanced')
+    }
+    if (formData.strategy_type === 'Dynamic' || formData.strategy_type === 'DipBuying') {
+      if (activeTab === 'simple') setActiveTab('advanced')
+    }
+    if (formData.strategy_type === 'Simple') {
+      if (activeTab === 'advanced') setActiveTab('simple')
+    }
+  }, [formData.strategy_type, activeTab])
 
   const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {}
@@ -171,10 +221,7 @@ export function DCAConfigComponent({
     const amountError = validateInvestmentAmount(formData.base_amount)
     if (amountError) newErrors.base_amount = amountError
 
-    // Frequency validations
-    if (formData.frequency_value <= 0) {
-      newErrors.frequency_value = 'Frequency value must be positive'
-    }
+    // Note: Frequency is now auto-derived from backtest_interval, no validation needed
 
     // Advanced RSI validations
     if (formData.enable_rsi) {
@@ -211,23 +258,27 @@ export function DCAConfigComponent({
 
   // Convert form data to backend DCA config format
   const convertToBackendConfig = useCallback((): DCAConfig => {
-    // Build frequency object
+    // Build frequency object based on backtest interval
+    // This ensures DCA frequency matches the data granularity
     let frequency: DCAFrequency
-    switch (formData.frequency_type) {
-      case 'hourly':
-        frequency = { Hourly: formData.frequency_value }
+    const interval = formData.backtest_interval || '1d'
+
+    switch (interval) {
+      case '1m':
+      case '5m':
+      case '15m':
+      case '30m':
+        frequency = { Hourly: 1 } // For minute intervals, DCA every hour
         break
-      case 'daily':
-        frequency = { Daily: formData.frequency_value }
+      case '1h':
+      case '4h':
+        frequency = { Hourly: 4 } // For hourly intervals, DCA every 4 hours
         break
-      case 'weekly':
-        frequency = { Weekly: formData.frequency_value }
+      case '1d':
+        frequency = { Daily: 1 } // For daily candles, DCA daily
         break
-      case 'monthly':
-        frequency = { Monthly: formData.frequency_value }
-        break
-      case 'custom':
-        frequency = { Custom: formData.frequency_value }
+      case '1w':
+        frequency = { Weekly: 1 } // For weekly candles, DCA weekly
         break
       default:
         frequency = { Daily: 1 }
@@ -274,6 +325,61 @@ export function DCAConfigComponent({
         oversold_multiplier: formData.rsi_oversold_multiplier,
         overbought_multiplier: formData.rsi_overbought_multiplier,
         normal_multiplier: 1.0
+      }
+    }
+
+    // Dip Buying strategy - create dip levels array
+    if (formData.strategy_type === 'DipBuying') {
+      config.dip_levels = [
+        {
+          price_drop_percentage: formData.dip_threshold_percentage,
+          amount_multiplier: formData.dip_multiplier,
+          max_triggers: formData.max_dip_purchases
+        },
+        {
+          price_drop_percentage: formData.dip_threshold_percentage * 2,
+          amount_multiplier: formData.dip_multiplier * 1.5,
+          max_triggers: Math.max(1, Math.floor(formData.max_dip_purchases / 2))
+        },
+        {
+          price_drop_percentage: formData.dip_threshold_percentage * 4,
+          amount_multiplier: formData.dip_multiplier * 3,
+          max_triggers: 1
+        }
+      ]
+      config.reference_period_days = 30
+    }
+
+    // Dynamic strategy - create dynamic factors
+    if (formData.strategy_type === 'Dynamic') {
+      config.dynamic_factors = {
+        rsi_weight: formData.enable_rsi ? 0.4 : 0,
+        volatility_weight: formData.volatility_adjustment ? 0.3 : 0,
+        sentiment_weight: formData.sentiment_multiplier ? 0.2 : 0,
+        trend_weight: 0.1,
+        max_multiplier: 3.0,
+        min_multiplier: 0.3
+      }
+      // Dynamic strategy requires RSI and Volatility configs
+      if (!config.rsi_config) {
+        config.rsi_config = {
+          period: 14,
+          oversold_threshold: 30,
+          overbought_threshold: 70,
+          oversold_multiplier: 2.0,
+          overbought_multiplier: 0.5,
+          normal_multiplier: 1.0
+        }
+      }
+      if (!config.volatility_config) {
+        config.volatility_config = {
+          period: 20,
+          low_threshold: 10,
+          high_threshold: 30,
+          low_volatility_multiplier: 0.8,
+          high_volatility_multiplier: 1.5,
+          normal_multiplier: 1.0
+        }
       }
     }
 
@@ -331,7 +437,7 @@ export function DCAConfigComponent({
 
     if (nameError || symbolError || amountError) return false
 
-    if (formData.frequency_value <= 0) return false
+    // Frequency is auto-derived, no validation needed
 
     if (formData.enable_rsi && formData.rsi_oversold >= formData.rsi_overbought) return false
     if (formData.volatility_adjustment && formData.volatility_low_threshold >= formData.volatility_high_threshold) return false
@@ -343,13 +449,25 @@ export function DCAConfigComponent({
   const handleBacktest = useCallback(() => {
     if (onBacktest && isFormValid) {
       const backtestConfig = convertToBackendConfig()
+      console.log('DCA Backtest Config:', JSON.stringify(backtestConfig, null, 2))
+      console.log('FormData strategy_type:', formData.strategy_type)
+      console.log('FormData enable_rsi:', formData.enable_rsi)
       // Add risk management parameters for backtesting
       const backtestConfigWithRisk = {
         ...backtestConfig,
         stop_loss_percentage: formData.enable_stop_loss ? formData.stop_loss_percentage : undefined,
         take_profit_percentage: formData.enable_take_profit ? formData.take_profit_percentage : undefined
       }
-      onBacktest(backtestConfigWithRisk, formData.name, formData.asset_symbol)
+
+      // Pass backtest parameters
+      const backtestParams = {
+        start_date: formData.backtest_start_date || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        end_date: formData.backtest_end_date || new Date().toISOString().split('T')[0],
+        interval: formData.backtest_interval || '1d',
+        initial_capital: formData.backtest_initial_capital || 10000
+      }
+
+      onBacktest(backtestConfigWithRisk, formData.name, formData.asset_symbol, backtestParams)
     }
   }, [onBacktest, formData, isFormValid, convertToBackendConfig])
 
@@ -417,7 +535,7 @@ export function DCAConfigComponent({
                 <span>Core Configuration</span>
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="base_amount" className="text-white/80">Base Amount ($)</Label>
                   <Input
@@ -435,6 +553,9 @@ export function DCAConfigComponent({
                   {errors.base_amount && (
                     <p className="text-red-400 text-sm">{errors.base_amount}</p>
                   )}
+                  <p className="text-xs text-white/50">
+                    Amount to invest per DCA execution
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -443,16 +564,46 @@ export function DCAConfigComponent({
                     value={formData.strategy_type}
                     onValueChange={(value) => setFormData({ ...formData, strategy_type: value as DCAFormData['strategy_type'] })}
                   >
-                    <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/20">
                       <SelectValue placeholder="Select strategy type" />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/90 border-white/20">
-                      <SelectItem value="Simple">Simple</SelectItem>
-                      <SelectItem value="VolatilityBased">Volatility Based</SelectItem>
-                      <SelectItem value="RSIBased">RSI Based</SelectItem>
-                      <SelectItem value="SentimentBased">Sentiment Based</SelectItem>
-                      <SelectItem value="Dynamic">Dynamic</SelectItem>
-                      <SelectItem value="DipBuying">Dip Buying</SelectItem>
+                    <SelectContent className="bg-slate-900 border-white/30 backdrop-blur-xl">
+                      <SelectItem value="Simple" className="text-white hover:bg-green-500/20 focus:bg-green-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Simple</span>
+                          <span className="text-xs text-green-400 ml-2">Low Risk</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="RSIBased" className="text-white hover:bg-orange-500/20 focus:bg-orange-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>RSI Based</span>
+                          <span className="text-xs text-orange-400 ml-2">Medium Risk</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="VolatilityBased" className="text-white hover:bg-yellow-500/20 focus:bg-yellow-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Volatility Based</span>
+                          <span className="text-xs text-yellow-400 ml-2">Medium Risk</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="SentimentBased" className="text-white hover:bg-blue-500/20 focus:bg-blue-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Sentiment Based</span>
+                          <span className="text-xs text-blue-400 ml-2">Medium Risk</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="Dynamic" className="text-white hover:bg-red-500/20 focus:bg-red-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Dynamic</span>
+                          <span className="text-xs text-red-400 ml-2">High Risk</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="DipBuying" className="text-white hover:bg-purple-500/20 focus:bg-purple-500/20 cursor-pointer">
+                        <div className="flex items-center justify-between w-full">
+                          <span>Dip Buying</span>
+                          <span className="text-xs text-purple-400 ml-2">High Risk</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="text-xs text-white/60">
@@ -462,113 +613,183 @@ export function DCAConfigComponent({
                     : {strategyTypeInfo.description}
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/80">Frequency</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select
-                      value={formData.frequency_type}
-                      onValueChange={(value) => setFormData({ ...formData, frequency_type: value as DCAFormData['frequency_type'] })}
-                    >
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-black/90 border-white/20">
-                        <SelectItem value="hourly">Hourly</SelectItem>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.frequency_value}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        frequency_value: parseInt(e.target.value) || 1
-                      })}
-                      className="bg-white/10 border-white/20 text-white"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
 
 
+            {/* Strategy Type Info Banner */}
+            <div className={cn(
+              "p-4 rounded-lg border-2 transition-all",
+              strategyTypeInfo.color === 'text-green-400' && "bg-green-500/10 border-green-500/30",
+              strategyTypeInfo.color === 'text-yellow-400' && "bg-yellow-500/10 border-yellow-500/30",
+              strategyTypeInfo.color === 'text-orange-400' && "bg-orange-500/10 border-orange-500/30",
+              strategyTypeInfo.color === 'text-red-400' && "bg-red-500/10 border-red-500/30",
+              strategyTypeInfo.color === 'text-blue-400' && "bg-blue-500/10 border-blue-500/30",
+              strategyTypeInfo.color === 'text-purple-400' && "bg-purple-500/10 border-purple-500/30"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-white/70 text-sm">Selected Strategy: </span>
+                  <span className={cn("font-bold text-lg", strategyTypeInfo.color)}>
+                    {formData.strategy_type}
+                  </span>
+                </div>
+                <div className={cn("px-3 py-1 rounded-full text-xs font-semibold", strategyTypeInfo.color)}>
+                  {strategyTypeInfo.risk} Risk
+                </div>
+              </div>
+              <p className="text-white/60 text-sm mt-2">{strategyTypeInfo.description}</p>
+            </div>
+
             {/* Configuration Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-white/5">
-                <TabsTrigger value="simple">Simple</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
-                <TabsTrigger value="risk">Risk Mgmt</TabsTrigger>
-                <TabsTrigger value="filters">Filters</TabsTrigger>
+              <TabsList className={cn(
+                "grid w-full bg-white/5",
+                relevantTabs.advanced ? "grid-cols-4" : "grid-cols-3"
+              )}>
+                <TabsTrigger value="simple" className="data-[state=active]:bg-blue-500/20">
+                  Overview
+                </TabsTrigger>
+                {relevantTabs.advanced && (
+                  <TabsTrigger value="advanced" className="data-[state=active]:bg-purple-500/20">
+                    {formData.strategy_type === 'RSIBased' ? 'RSI Config' :
+                     formData.strategy_type === 'VolatilityBased' ? 'Volatility Config' :
+                     formData.strategy_type === 'SentimentBased' ? 'Sentiment Config' :
+                     formData.strategy_type === 'DipBuying' ? 'Dip Buying' :
+                     formData.strategy_type === 'Dynamic' ? 'Dynamic Factors' : 'Advanced'}
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="risk" className="data-[state=active]:bg-orange-500/20">
+                  Risk & Limits
+                </TabsTrigger>
+                <TabsTrigger value="filters" className="data-[state=active]:bg-cyan-500/20">
+                  Backtest Setup
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="simple" className="space-y-4">
                 {/* Tab Description */}
                 <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <p className="text-sm text-blue-200">
-                    <strong>Simple Configuration:</strong> Basic market intelligence features to enhance your DCA strategy with sentiment and volatility adjustments.
+                    {formData.strategy_type === 'Simple' ? (
+                      <><strong>Simple Strategy:</strong> Pure Dollar Cost Averaging - invest a fixed amount at regular intervals. No complex market analysis needed.</>
+                    ) : (
+                      <><strong>Quick Options:</strong> Toggle basic features for your {formData.strategy_type} strategy. Configure advanced parameters in the Advanced tab.</>
+                    )}
                   </p>
                 </div>
 
-                {/* Simple Market Intelligence */}
-                <div className="space-y-4">
-                  <h4 className="text-md font-semibold text-white/90 flex items-center space-x-2">
-                    <Clock className="h-4 w-4" />
-                    <span>Market Intelligence</span>
-                  </h4>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-white/80">Sentiment Multiplier</Label>
-                        <Switch
-                          checked={formData.sentiment_multiplier}
-                          onCheckedChange={(checked) => setFormData({ ...formData, sentiment_multiplier: checked })}
-                        />
-                      </div>
-                      <p className="text-xs text-white/60">
-                        Adjust purchase amounts based on market sentiment (Fear & Greed Index)
-                      </p>
+                {/* Show summary for Simple strategy */}
+                {formData.strategy_type === 'Simple' && (
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-white/90 font-semibold">Strategy Summary</h4>
+                      <span className="text-green-400 text-sm">✓ Ready to Test</span>
                     </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-white/80">Volatility Adjustment</Label>
-                        <Switch
-                          checked={formData.volatility_adjustment}
-                          onCheckedChange={(checked) => setFormData({ ...formData, volatility_adjustment: checked })}
-                        />
+                    <div className="space-y-2 text-sm text-white/70">
+                      <div className="flex justify-between">
+                        <span>Investment per cycle:</span>
+                        <span className="text-white font-semibold">${formData.base_amount}</span>
                       </div>
-                      <p className="text-xs text-white/60">
-                        Increase purchases during high volatility periods
-                      </p>
+                      <div className="flex justify-between">
+                        <span>DCA Frequency:</span>
+                        <span className="text-white font-semibold">
+                          {formData.backtest_interval === '1w' ? 'Weekly' :
+                           formData.backtest_interval === '1d' ? 'Daily' :
+                           formData.backtest_interval === '1h' || formData.backtest_interval === '4h' ? 'Every 4 hours' :
+                           'Hourly'} (synced with interval)
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Data interval:</span>
+                        <span className="text-white font-semibold">
+                          {formData.backtest_interval}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* Quick toggles for non-Simple strategies */}
+                {formData.strategy_type !== 'Simple' && (
+                  <div className="space-y-4">
+                    <h4 className="text-md font-semibold text-white/90 flex items-center space-x-2">
+                      <Zap className="h-4 w-4" />
+                      <span>Quick Toggles</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {formData.strategy_type !== 'SentimentBased' && (
+                        <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-white/90 font-medium">Sentiment Analysis</Label>
+                            <Switch
+                              checked={formData.sentiment_multiplier}
+                              onCheckedChange={(checked) => setFormData({ ...formData, sentiment_multiplier: checked })}
+                            />
+                          </div>
+                          <p className="text-xs text-white/60">
+                            Adjust based on Fear & Greed Index
+                          </p>
+                        </div>
+                      )}
+
+                      {formData.strategy_type !== 'VolatilityBased' && (
+                        <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-white/90 font-medium">Volatility Adjustment</Label>
+                            <Switch
+                              checked={formData.volatility_adjustment}
+                              onCheckedChange={(checked) => setFormData({ ...formData, volatility_adjustment: checked })}
+                            />
+                          </div>
+                          <p className="text-xs text-white/60">
+                            Buy more during high volatility
+                          </p>
+                        </div>
+                      )}
+
+                      {formData.strategy_type !== 'RSIBased' && (
+                        <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-white/90 font-medium">RSI Timing</Label>
+                            <Switch
+                              checked={formData.enable_rsi}
+                              onCheckedChange={(checked) => setFormData({ ...formData, enable_rsi: checked })}
+                            />
+                          </div>
+                          <p className="text-xs text-white/60">
+                            Use RSI for market timing
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-6">
                 {/* Tab Description */}
                 <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
                   <p className="text-sm text-purple-200">
-                    <strong>Advanced Configuration:</strong> Advanced options appear based on your selected strategy type. Fine-tune RSI, volatility, sentiment, and dip buying parameters for sophisticated market analysis.
+                    <strong>{formData.strategy_type} Configuration:</strong> {
+                      formData.strategy_type === 'RSIBased' ? 'Configure RSI thresholds and multipliers to time your DCA purchases based on overbought/oversold conditions.' :
+                      formData.strategy_type === 'VolatilityBased' ? 'Set volatility thresholds to increase purchases during market turbulence.' :
+                      formData.strategy_type === 'SentimentBased' ? 'Adjust purchase amounts based on Fear & Greed Index and market sentiment.' :
+                      formData.strategy_type === 'DipBuying' ? 'Configure price drop levels and multipliers for aggressive dip buying.' :
+                      formData.strategy_type === 'Dynamic' ? 'Combine multiple factors with custom weights for optimal DCA timing.' :
+                      'Fine-tune advanced parameters for your strategy.'
+                    }
                   </p>
                 </div>
 
                 {/* Advanced RSI Configuration */}
-                {(formData.strategy_type === 'RSIBased' || formData.strategy_type === 'Dynamic' || formData.enable_rsi) && (
+                {(formData.strategy_type === 'RSIBased' || formData.strategy_type === 'Dynamic') && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-md font-semibold text-white/90">RSI Configuration</h4>
-                      <Switch
-                        checked={formData.enable_rsi}
-                        onCheckedChange={(checked) => setFormData({ ...formData, enable_rsi: checked })}
-                      />
-                    </div>
+                    <h4 className="text-md font-semibold text-white/90 flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-orange-400" />
+                      RSI Parameters
+                    </h4>
 
                     {formData.enable_rsi && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -618,9 +839,12 @@ export function DCAConfigComponent({
                 )}
 
                 {/* Advanced Volatility Configuration */}
-                {(formData.strategy_type === 'VolatilityBased' || formData.strategy_type === 'Dynamic' || formData.volatility_adjustment) && (
+                {(formData.strategy_type === 'VolatilityBased' || formData.strategy_type === 'Dynamic') && (
                   <div className="space-y-4">
-                    <h4 className="text-md font-semibold text-white/90">Volatility Configuration</h4>
+                    <h4 className="text-md font-semibold text-white/90 flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-yellow-400" />
+                      Volatility Parameters
+                    </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Volatility Period: {formData.volatility_period}</Label>
@@ -667,9 +891,12 @@ export function DCAConfigComponent({
                 )}
 
                 {/* Advanced Sentiment Configuration */}
-                {(formData.strategy_type === 'SentimentBased' || formData.strategy_type === 'Dynamic' || formData.sentiment_multiplier) && (
+                {(formData.strategy_type === 'SentimentBased' || formData.strategy_type === 'Dynamic') && (
                   <div className="space-y-4">
-                    <h4 className="text-md font-semibold text-white/90">Sentiment Configuration</h4>
+                    <h4 className="text-md font-semibold text-white/90 flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-blue-400" />
+                      Sentiment Parameters
+                    </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Fear & Greed Threshold: {formData.fear_greed_threshold}</Label>
@@ -706,9 +933,20 @@ export function DCAConfigComponent({
                 )}
 
                 {/* Advanced Dip Buying Configuration */}
-                {(formData.strategy_type === 'DipBuying' || formData.strategy_type === 'Dynamic') && (
+                {formData.strategy_type === 'DipBuying' && (
                   <div className="space-y-4">
-                    <h4 className="text-md font-semibold text-white/90">Dip Buying Configuration</h4>
+                    <h4 className="text-md font-semibold text-white/90 flex items-center gap-2">
+                      <Target className="h-5 w-5 text-purple-400" />
+                      Dip Buying Parameters
+                    </h4>
+                    <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-sm text-purple-200">
+                      <p>💡 The system will automatically create 3 dip levels based on your threshold:</p>
+                      <ul className="list-disc list-inside mt-2 space-y-1 text-xs">
+                        <li>Level 1: {formData.dip_threshold_percentage}% drop → {formData.dip_multiplier}x multiplier</li>
+                        <li>Level 2: {formData.dip_threshold_percentage * 2}% drop → {(formData.dip_multiplier * 1.5).toFixed(1)}x multiplier</li>
+                        <li>Level 3: {formData.dip_threshold_percentage * 4}% drop → {(formData.dip_multiplier * 3).toFixed(1)}x multiplier</li>
+                      </ul>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Dip Threshold: {formData.dip_threshold_percentage}%</Label>
@@ -847,39 +1085,181 @@ export function DCAConfigComponent({
 
               <TabsContent value="filters" className="space-y-4">
                 {/* Tab Description */}
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <p className="text-sm text-green-200">
-                    <strong>Trading Filters:</strong> Control when your DCA strategy executes with time-based restrictions and execution limits.
+                <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                  <p className="text-sm text-cyan-200">
+                    <strong>Backtest Configuration:</strong> Set the date range, interval (kline), and initial capital for your backtest simulation.
+                  </p>
+                  <p className="text-xs text-cyan-300 mt-2">
+                    💡 <strong>Note:</strong> The candlestick interval also determines DCA execution frequency (e.g., 1d interval = daily DCA, 1w = weekly DCA)
                   </p>
                 </div>
 
-                {/* Trading Filters */}
+                {/* Backtest Settings */}
                 <div className="space-y-4">
-                  <h4 className="text-md font-semibold text-white/90">Trading Filters</h4>
+                  <h4 className="text-md font-semibold text-white/90 flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-cyan-400" />
+                    Backtest Parameters
+                  </h4>
 
-                  <div className="space-y-4">
+                  {/* Quick Period Presets */}
+                  <div className="space-y-2">
+                    <Label className="text-white/80">Quick Presets</Label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date().toISOString().split('T')[0]
+                          const start = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                          setFormData({ ...formData, backtest_start_date: start, backtest_end_date: today })
+                        }}
+                        className="bg-white/5 border-white/20 text-white/80 hover:bg-white/10 text-xs"
+                      >
+                        6 Months
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date().toISOString().split('T')[0]
+                          const start = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                          setFormData({ ...formData, backtest_start_date: start, backtest_end_date: today })
+                        }}
+                        className="bg-white/5 border-white/20 text-white/80 hover:bg-white/10 text-xs"
+                      >
+                        1 Year
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date().toISOString().split('T')[0]
+                          const start = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                          setFormData({ ...formData, backtest_start_date: start, backtest_end_date: today })
+                        }}
+                        className="bg-white/5 border-white/20 text-white/80 hover:bg-white/10 text-xs"
+                      >
+                        2 Years
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const today = new Date().toISOString().split('T')[0]
+                          const start = new Date(Date.now() - 1095 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                          setFormData({ ...formData, backtest_start_date: start, backtest_end_date: today })
+                        }}
+                        className="bg-white/5 border-white/20 text-white/80 hover:bg-white/10 text-xs"
+                      >
+                        3 Years
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Date Range */}
                     <div className="space-y-2">
-                      <Label className="text-white/80">Max Executions Per Day</Label>
+                      <Label className="text-white/80">Start Date</Label>
                       <Input
-                        type="number"
-                        min="1"
-                        max="24"
-                        value={formData.max_executions_per_day || ''}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          max_executions_per_day: parseInt(e.target.value) || undefined
-                        })}
-                        placeholder="3"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                        type="date"
+                        value={formData.backtest_start_date}
+                        onChange={(e) => setFormData({ ...formData, backtest_start_date: e.target.value })}
+                        className="bg-white/10 border-white/20 text-white"
                       />
+                      <p className="text-xs text-white/60">Beginning of backtest period (up to 5 years ago)</p>
                     </div>
 
-                    <div className="text-sm text-white/70">
-                      <p>Additional filters like allowed hours and weekdays can be configured here.</p>
-                      <p className="text-xs text-white/50 mt-1">
-                        These advanced filters help control when the strategy can execute trades.
+                    <div className="space-y-2">
+                      <Label className="text-white/80">End Date</Label>
+                      <Input
+                        type="date"
+                        value={formData.backtest_end_date}
+                        onChange={(e) => setFormData({ ...formData, backtest_end_date: e.target.value })}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="bg-white/10 border-white/20 text-white"
+                      />
+                      <p className="text-xs text-white/60">End of backtest period</p>
+                    </div>
+
+                    {/* Kline Interval */}
+                    <div className="space-y-2">
+                      <Label className="text-white/80">Candlestick Interval (Kline)</Label>
+                      <Select
+                        value={formData.backtest_interval}
+                        onValueChange={(value) => setFormData({ ...formData, backtest_interval: value as DCAFormData['backtest_interval'] })}
+                      >
+                        <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-white/30 backdrop-blur-xl">
+                          <SelectItem value="1m" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">1 Minute</SelectItem>
+                          <SelectItem value="5m" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">5 Minutes</SelectItem>
+                          <SelectItem value="15m" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">15 Minutes</SelectItem>
+                          <SelectItem value="30m" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">30 Minutes</SelectItem>
+                          <SelectItem value="1h" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">1 Hour</SelectItem>
+                          <SelectItem value="4h" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">4 Hours</SelectItem>
+                          <SelectItem value="1d" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">1 Day (Recommended)</SelectItem>
+                          <SelectItem value="1w" className="text-white hover:bg-cyan-500/20 focus:bg-cyan-500/20 cursor-pointer">1 Week</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-white/60">
+                        Smaller intervals = more data points, longer processing
                       </p>
                     </div>
+
+                    {/* Initial Capital */}
+                    <div className="space-y-2">
+                      <Label className="text-white/80">Initial Capital ($)</Label>
+                      <Input
+                        type="number"
+                        step="100"
+                        min="100"
+                        value={formData.backtest_initial_capital}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          backtest_initial_capital: parseFloat(e.target.value) || 10000
+                        })}
+                        placeholder="10000"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      />
+                      <p className="text-xs text-white/60">Starting portfolio value</p>
+                    </div>
+                  </div>
+
+                  {/* Backtest Summary */}
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <h5 className="text-white/90 font-semibold mb-2">Backtest Summary</h5>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-white/70">Duration:</div>
+                      <div className="text-white font-semibold">
+                        {formData.backtest_start_date && formData.backtest_end_date
+                          ? (() => {
+                              const days = Math.ceil((new Date(formData.backtest_end_date).getTime() - new Date(formData.backtest_start_date).getTime()) / (1000 * 60 * 60 * 24))
+                              const years = (days / 365).toFixed(1)
+                              return days > 365 ? `${days} days (~${years} years)` : `${days} days`
+                            })()
+                          : '0 days'}
+                      </div>
+                      <div className="text-white/70">Data interval:</div>
+                      <div className="text-white font-semibold">{formData.backtest_interval}</div>
+                      <div className="text-white/70">Starting capital:</div>
+                      <div className="text-white font-semibold">${formData.backtest_initial_capital?.toLocaleString()}</div>
+                      <div className="text-white/70">Max duration:</div>
+                      <div className="text-white/60 text-xs">5 years (1,825 days)</div>
+                    </div>
+
+                    {/* Warning for long periods with small intervals */}
+                    {formData.backtest_start_date && formData.backtest_end_date &&
+                     Math.ceil((new Date(formData.backtest_end_date).getTime() - new Date(formData.backtest_start_date).getTime()) / (1000 * 60 * 60 * 24)) > 730 &&
+                     ['1m', '5m', '15m', '30m', '1h'].includes(formData.backtest_interval || '') && (
+                      <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs text-yellow-300">
+                        ⚠️ Long backtest period with small interval may take longer to process
+                      </div>
+                    )}
                   </div>
                 </div>
               </TabsContent>
@@ -900,16 +1280,66 @@ export function DCAConfigComponent({
               </div>
             )}
 
-            {/* Strategy Tips */}
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-              <h4 className="font-medium text-blue-400 mb-2">💡 DCA Strategy Tips</h4>
-              <ul className="text-sm text-white/70 space-y-1">
-                <li>• Use Simple strategy for conservative, predictable DCA</li>
-                <li>• RSI-based strategy buys more when assets are oversold</li>
-                <li>• Volatility-based strategy increases purchases during market turbulence</li>
-                <li>• Dynamic strategy combines multiple indicators for optimal timing</li>
-                <li>• Always enable risk management for safer long-term investing</li>
-              </ul>
+            {/* Strategy-Specific Tips */}
+            <div className={cn(
+              "rounded-lg p-4 border-2",
+              formData.strategy_type === 'Simple' && "bg-green-500/10 border-green-500/20",
+              formData.strategy_type === 'RSIBased' && "bg-orange-500/10 border-orange-500/20",
+              formData.strategy_type === 'VolatilityBased' && "bg-yellow-500/10 border-yellow-500/20",
+              formData.strategy_type === 'SentimentBased' && "bg-blue-500/10 border-blue-500/20",
+              formData.strategy_type === 'Dynamic' && "bg-red-500/10 border-red-500/20",
+              formData.strategy_type === 'DipBuying' && "bg-purple-500/10 border-purple-500/20"
+            )}>
+              <h4 className="font-medium text-white/90 mb-3 flex items-center gap-2">
+                💡 {formData.strategy_type} Strategy Tips
+              </h4>
+              <div className="text-sm text-white/70 space-y-2">
+                {formData.strategy_type === 'Simple' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Long-term investors who want predictable, automatic investing</p>
+                    <p>• <strong>Recommended frequency:</strong> Weekly or bi-weekly for most investors</p>
+                    <p>• <strong>Pro tip:</strong> Start with $50-$200 per cycle to test the strategy</p>
+                  </>
+                )}
+                {formData.strategy_type === 'RSIBased' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Timing market entries during oversold conditions</p>
+                    <p>• <strong>Recommended:</strong> Set oversold threshold around 30, overbought around 70</p>
+                    <p>• <strong>Pro tip:</strong> Higher multipliers (2-3x) during oversold periods can maximize dip buying</p>
+                  </>
+                )}
+                {formData.strategy_type === 'VolatilityBased' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Taking advantage of market turbulence and fear</p>
+                    <p>• <strong>Recommended:</strong> Set high volatility threshold around 30-40%</p>
+                    <p>• <strong>Pro tip:</strong> Use higher multipliers (1.5-2x) during high volatility to buy the fear</p>
+                  </>
+                )}
+                {formData.strategy_type === 'SentimentBased' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Contrarian investors who buy when others are fearful</p>
+                    <p>• <strong>Recommended:</strong> Fear threshold around 20-30 for extreme fear buying</p>
+                    <p>• <strong>Pro tip:</strong> Higher bearish multipliers help accumulate during market panic</p>
+                  </>
+                )}
+                {formData.strategy_type === 'Dynamic' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Advanced investors wanting multi-factor optimization</p>
+                    <p>• <strong>Recommended:</strong> Enable at least RSI and Volatility for best results</p>
+                    <p>• <strong>Pro tip:</strong> This strategy automatically adjusts based on all enabled factors</p>
+                  </>
+                )}
+                {formData.strategy_type === 'DipBuying' && (
+                  <>
+                    <p>• <strong>Best for:</strong> Aggressive accumulation during price drops</p>
+                    <p>• <strong>Recommended:</strong> Set initial dip threshold around 5-10%</p>
+                    <p>• <strong>Pro tip:</strong> The strategy creates 3 levels automatically - larger dips = bigger buys</p>
+                  </>
+                )}
+                <p className="text-yellow-400/80 mt-3">
+                  ⚠️ Always test your strategy with backtesting before deploying with real capital!
+                </p>
+              </div>
             </div>
 
             {/* Action Buttons */}

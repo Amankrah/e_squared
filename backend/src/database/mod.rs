@@ -79,6 +79,10 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
     migrate_strategy_config_columns(db).await?;
     // Migration for backtest results table schema fix
     migrate_backtest_results_schema(db).await?;
+    // Migration for strategy_type column
+    migrate_strategy_type_column(db).await?;
+    // Migration for total_invested column
+    migrate_total_invested_column(db).await?;
 
     info!("✓ Database migrations completed");
     Ok(())
@@ -268,6 +272,52 @@ async fn migrate_backtest_results_schema(db: &DatabaseConnection) -> Result<()> 
         Err(_) => {
             // Table doesn't exist yet, will be created with correct schema
             info!("Backtest results table doesn't exist yet, will be created with correct schema");
+        }
+    }
+
+    Ok(())
+}
+
+async fn migrate_strategy_type_column(db: &DatabaseConnection) -> Result<()> {
+    // Check if strategy_type column exists
+    let test_query = "SELECT strategy_type FROM backtest_results LIMIT 1";
+
+    match db.execute_unprepared(test_query).await {
+        Ok(_) => {
+            info!("strategy_type column already exists in backtest_results table");
+        },
+        Err(_) => {
+            // Column doesn't exist, add it
+            match db.execute_unprepared("ALTER TABLE backtest_results ADD COLUMN strategy_type TEXT").await {
+                Ok(_) => info!("✓ Added strategy_type column to backtest_results table"),
+                Err(e) => {
+                    error!("Failed to add strategy_type column: {}", e);
+                    return Err(e.into());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn migrate_total_invested_column(db: &DatabaseConnection) -> Result<()> {
+    // Check if total_invested column exists
+    let test_query = "SELECT total_invested FROM backtest_results LIMIT 1";
+
+    match db.execute_unprepared(test_query).await {
+        Ok(_) => {
+            info!("total_invested column already exists in backtest_results table");
+        },
+        Err(_) => {
+            // Column doesn't exist, add it
+            match db.execute_unprepared("ALTER TABLE backtest_results ADD COLUMN total_invested REAL NOT NULL DEFAULT 0").await {
+                Ok(_) => info!("✓ Added total_invested column to backtest_results table"),
+                Err(e) => {
+                    error!("Failed to add total_invested column: {}", e);
+                    return Err(e.into());
+                }
+            }
         }
     }
 

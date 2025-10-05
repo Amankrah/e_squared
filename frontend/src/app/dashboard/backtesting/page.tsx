@@ -71,8 +71,9 @@ export default function BacktestingPage() {
     const symbol = engineResult.config?.symbol || 'BTC'
     const strategyName = engineResult.config?.strategy_name || 'dca_v2'
     const interval = engineResult.config?.interval || '1d'
-    const startDate = engineResult.config?.start_date || new Date().toISOString()
-    const endDate = engineResult.config?.end_date || new Date().toISOString()
+    // Backend uses start_time/end_time, not start_date/end_date
+    const startDate = (engineResult.config as any)?.start_time || engineResult.config?.start_date || new Date().toISOString()
+    const endDate = (engineResult.config as any)?.end_time || engineResult.config?.end_date || new Date().toISOString()
     const initialBalance = engineResult.config?.initial_balance?.toString() || '10000'
 
     return {
@@ -107,8 +108,10 @@ export default function BacktestingPage() {
       updated_at: new Date().toISOString(),
       // Additional fields for compatibility
       equity_curve: engineResult.performance_chart,
-      trades_data: engineResult.trades
-    }
+      trades_data: engineResult.trades,
+      // DCA-specific field
+      total_invested: engineResult.metrics.total_invested
+    } as any
   }
   const [selectedStrategyType, setSelectedStrategyType] = useState<StrategyType>()
   const [customDCAConfig, setCustomDCAConfig] = useState<DCAConfigType | null>(null)
@@ -233,7 +236,17 @@ export default function BacktestingPage() {
     setViewMode('configure')
   }
 
-  const handleDCABacktest = async (config: DCAConfigType, name: string, assetSymbol: string) => {
+  const handleDCABacktest = async (
+    config: DCAConfigType,
+    name: string,
+    assetSymbol: string,
+    backtestParams: {
+      start_date: string
+      end_date: string
+      interval: string
+      initial_capital: number
+    }
+  ) => {
     setCustomDCAConfig(config)
     setViewMode('running')
 
@@ -241,11 +254,11 @@ export default function BacktestingPage() {
       const request: BacktestRequest = {
         strategy_type: 'dca',
         asset_symbol: assetSymbol || 'BTC',
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        initial_capital: 10000,
+        start_date: backtestParams.start_date,
+        end_date: backtestParams.end_date,
+        initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: '1d'
+        interval: backtestParams.interval
       }
       await handleRunBacktest(request)
     } catch (error) {

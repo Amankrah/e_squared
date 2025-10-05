@@ -62,6 +62,12 @@ export function BacktestResults({
   const isProfit = parseFloat(results.total_return) >= 0
   const returnColor = isProfit ? 'text-green-400' : 'text-red-400'
 
+  // Check if this is a DCA strategy
+  const isDCA = results.strategy_name?.toLowerCase().includes('dca') || false
+
+  // Get total_invested from metrics if available (for engine results)
+  const totalInvested = (results as any).total_invested || null
+
   const getPerformanceRating = () => {
     const totalReturn = parseFloat(results.total_return_percentage)
     const sharpeRatio = results.sharpe_ratio ? parseFloat(results.sharpe_ratio) : 0
@@ -90,32 +96,56 @@ export function BacktestResults({
 
   // Create simple chart data (you could integrate with a charting library like Chart.js or Recharts)
   const createEquityCurve = () => {
+    // Use total_invested as baseline for DCA, initial_balance for others
+    const baseAmount = isDCA && totalInvested
+      ? parseFloat(totalInvested)
+      : parseFloat(results.initial_balance)
+
     // Check if equity_curve data exists and is an array
     if (!results.equity_curve || !Array.isArray(results.equity_curve) || results.equity_curve.length === 0) {
-      // Fallback: create a simple line from initial to final balance
-      const initialBalance = parseFloat(results.initial_balance)
+      // Fallback: create a simple line from base to final balance
       const finalBalance = parseFloat(results.final_balance)
-      return [
-        { x: 0, y: 0, normalizedY: 50 },
-        { x: 100, y: ((finalBalance - initialBalance) / initialBalance) * 100, normalizedY: 50 }
-      ]
+      const returnPct = ((finalBalance - baseAmount) / baseAmount) * 100
+
+      // Create a smooth curve instead of straight line
+      const points = []
+      for (let i = 0; i <= 20; i++) {
+        const progress = i / 20
+        // Simulate gradual growth
+        const value = baseAmount + (finalBalance - baseAmount) * progress
+        points.push({
+          x: progress * 100,
+          y: ((value - baseAmount) / baseAmount) * 100,
+          rawValue: value
+        })
+      }
+
+      const maxY = Math.max(...points.map(p => p.y))
+      const minY = Math.min(...points.map(p => p.y))
+      const range = Math.max(maxY - minY, 1) // Avoid division by zero
+
+      return points.map(p => ({
+        ...p,
+        normalizedY: range === 0 ? 50 : ((p.y - minY) / range) * 80 + 10
+      }))
     }
 
+    // Use actual equity curve data
     const points = results.equity_curve.map((dataPoint, index) => {
       const portfolioValue = parseFloat(
         dataPoint.portfolio_value ||
         ('value' in dataPoint ? (dataPoint as { value: string }).value : results.final_balance)
       )
-      const initialBalance = parseFloat(results.initial_balance)
       return {
-        x: (index / results.equity_curve!.length) * 100,
-        y: ((portfolioValue - initialBalance) / initialBalance) * 100
+        x: (index / (results.equity_curve!.length - 1)) * 100,
+        y: ((portfolioValue - baseAmount) / baseAmount) * 100,
+        rawValue: portfolioValue
       }
     })
 
     const maxY = Math.max(...points.map(p => p.y))
     const minY = Math.min(...points.map(p => p.y))
-    const range = maxY - minY
+    const range = Math.max(maxY - minY, 1) // Avoid division by zero
 
     return points.map(p => ({
       ...p,
@@ -140,10 +170,14 @@ export function BacktestResults({
               <div className="text-3xl">{strategyInfo.icon}</div>
               <div>
                 <CardTitle className="text-2xl font-bold text-white/90">
-                  Backtest Results
+                  Backtest Results: {strategyInfo.name}
                 </CardTitle>
                 <CardDescription className="text-white/60">
-                  {results.symbol} • {new Date(results.start_date).toLocaleDateString()} - {new Date(results.end_date).toLocaleDateString()}
+                  {results.symbol} • {results.strategy_type || 'Standard'} Strategy
+                </CardDescription>
+                <CardDescription className="text-white/50 text-sm">
+                  {new Date(results.start_date).toLocaleDateString()} - {new Date(results.end_date).toLocaleDateString()}
+                  ({Math.round((new Date(results.end_date).getTime() - new Date(results.start_date).getTime()) / (1000 * 60 * 60 * 24))} days)
                 </CardDescription>
               </div>
             </div>
@@ -162,7 +196,21 @@ export function BacktestResults({
 
           <CardContent>
             {/* Key Metrics Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className={cn(
+              "grid gap-4 mb-6",
+              isDCA && totalInvested ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"
+            )}>
+              {/* For DCA: Show Total Invested first */}
+              {isDCA && totalInvested && (
+                <div className="text-center p-4 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-lg border border-cyan-500/20">
+                  <div className="text-2xl font-bold text-cyan-400">
+                    {formatCurrency(totalInvested)}
+                  </div>
+                  <div className="text-sm text-white/60 mt-1">Total Invested</div>
+                  <div className="text-xs text-white/50">Capital deployed</div>
+                </div>
+              )}
+
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <div className={cn("text-2xl font-bold", returnColor)}>
                   {formatCurrency(results.total_return)}
@@ -195,10 +243,32 @@ export function BacktestResults({
                 </div>
                 <div className="text-sm text-white/60 mt-1">Win Rate</div>
                 <div className="text-xs text-white/50">
-                  {results.winning_trades}/{results.total_trades} trades
+                  {isDCA
+                    ? `${results.winning_trades} win / ${results.winning_trades + results.losing_trades} closed`
+                    : `${results.winning_trades}/${results.total_trades} trades`
+                  }
                 </div>
               </div>
             </div>
+
+            {/* DCA Strategy Explanation */}
+            {isDCA && totalInvested && (
+              <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-lg p-4 mb-6">
+                <div className="flex items-start space-x-3">
+                  <div className="text-cyan-400 mt-1">
+                    <Award className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-white/90 font-semibold mb-1">DCA Strategy Metrics</h4>
+                    <p className="text-sm text-white/70">
+                      This Dollar Cost Averaging strategy deployed <span className="font-semibold text-cyan-400">{formatCurrency(totalInvested)}</span> over time.
+                      The return percentage ({formatPercentage(results.total_return_percentage)}) is calculated based on your total invested amount,
+                      not the initial balance. This accurately reflects your strategy's performance.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Simple Equity Curve Visualization */}
             <div className="bg-black/30 rounded-lg p-4 mb-6">
@@ -206,28 +276,37 @@ export function BacktestResults({
                 <TrendingUp className="h-4 w-4" />
                 <span>Portfolio Growth</span>
               </h4>
-              <div className="relative h-32 bg-black/20 rounded">
-                <svg className="w-full h-full">
+              <div className="relative h-32 bg-black/20 rounded overflow-hidden">
+                <svg
+                  className="w-full h-full"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  style={{ display: 'block' }}
+                >
+                  {/* Grid lines for reference */}
+                  <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(255,255,255,0.05)" strokeWidth="0.2" />
+                  <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255,255,255,0.1)" strokeWidth="0.3" strokeDasharray="1,1" />
+                  <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(255,255,255,0.05)" strokeWidth="0.2" />
+
+                  {/* Fill area under curve */}
+                  <polygon
+                    points={`0,100 ${equityCurve.map(point => `${point.x},${100 - point.normalizedY}`).join(' ')} 100,100`}
+                    fill={isProfit ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}
+                  />
+
+                  {/* Main curve */}
                   <polyline
                     points={equityCurve.map(point => `${point.x},${100 - point.normalizedY}`).join(' ')}
                     fill="none"
                     stroke={isProfit ? '#10b981' : '#ef4444'}
-                    strokeWidth="2"
-                    className="drop-shadow-sm"
-                  />
-                  {/* Zero line */}
-                  <line
-                    x1="0"
-                    y1="50"
-                    x2="100"
-                    y2="50"
-                    stroke="rgba(255,255,255,0.2)"
-                    strokeWidth="1"
-                    strokeDasharray="2,2"
+                    strokeWidth="0.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="drop-shadow-lg"
                   />
                 </svg>
                 <div className="absolute bottom-2 left-2 text-xs text-white/50">
-                  Start: {formatCurrency(results.initial_balance)}
+                  {isDCA && totalInvested ? `Invested: ${formatCurrency(totalInvested)}` : `Start: ${formatCurrency(results.initial_balance)}`}
                 </div>
                 <div className="absolute bottom-2 right-2 text-xs text-white/50">
                   End: {formatCurrency(results.final_balance)}

@@ -217,6 +217,7 @@ pub async fn save_backtest_result(
         name: Set(request.name),
         description: Set(request.description),
         strategy_name: Set(request.strategy_name),
+        strategy_type: Set(request.strategy_type),
         symbol: Set(request.symbol),
         interval: Set(request.interval),
         start_date: Set(request.start_date),
@@ -237,6 +238,7 @@ pub async fn save_backtest_result(
         largest_loss: Set(request.largest_loss),
         average_win: Set(request.average_win),
         average_loss: Set(request.average_loss),
+        total_invested: Set(request.total_invested),
         strategy_parameters: Set(request.strategy_parameters),
         trades_data: Set(request.trades_data),
         equity_curve: Set(request.equity_curve),
@@ -345,6 +347,7 @@ pub async fn update_backtest_results(
 
     active_model.largest_win = Set(largest_win);
     active_model.largest_loss = Set(largest_loss);
+    active_model.total_invested = Set(engine_result.metrics.total_invested);
 
     // Store detailed data as JSON
     active_model.trades_data = Set(serde_json::to_value(&engine_result.trades).unwrap_or(serde_json::json!([])));
@@ -395,6 +398,7 @@ pub struct CreateBacktestResultRequest {
     pub name: String,
     pub description: Option<String>,
     pub strategy_name: String,
+    pub strategy_type: Option<String>,  // Sub-strategy type (e.g., "Simple", "RSIBased")
     pub symbol: String,
     pub interval: String,
     pub start_date: DateTime<ChronoUtc>,
@@ -415,6 +419,7 @@ pub struct CreateBacktestResultRequest {
     pub largest_loss: Decimal,
     pub average_win: Decimal,
     pub average_loss: Decimal,
+    pub total_invested: Decimal,
     pub strategy_parameters: serde_json::Value,
     pub trades_data: serde_json::Value,
     pub equity_curve: serde_json::Value,

@@ -7,7 +7,7 @@ pub struct DCAPresets;
 impl DCAPresets {
     /// Conservative DCA - Simple regular purchases
     pub fn conservative(base_amount: Decimal) -> DCAConfig {
-        DCAConfig::simple(base_amount, DCAFrequency::Daily(1))
+        DCAConfig::simple(base_amount, DCAFrequency::Weekly(1))
     }
 
     /// Aggressive DCA - RSI-based with higher multipliers
@@ -21,7 +21,7 @@ impl DCAPresets {
             normal_multiplier: Decimal::from(1),
         };
 
-        DCAConfig::rsi_based(base_amount, DCAFrequency::Hourly(12), rsi_config)
+        DCAConfig::rsi_based(base_amount, DCAFrequency::Daily(3), rsi_config)
     }
 
     /// Volatility-based DCA - Buy more during high volatility
@@ -35,7 +35,7 @@ impl DCAPresets {
             normal_multiplier: Decimal::from(1),
         };
 
-        DCAConfig::volatility_based(base_amount, DCAFrequency::Hourly(6), vol_config)
+        DCAConfig::volatility_based(base_amount, DCAFrequency::Daily(2), vol_config)
     }
 
     /// Dip buyer - Aggressive purchases on price drops
@@ -65,7 +65,7 @@ impl DCAPresets {
 
         DCAConfig::dip_buying(
             base_amount,
-            DCAFrequency::Hourly(4),
+            DCAFrequency::Daily(1),
             dip_levels,
             None,
         )
@@ -87,7 +87,7 @@ impl DCAPresets {
 
         DCAConfig::dynamic(
             base_amount,
-            DCAFrequency::Hourly(8),
+            DCAFrequency::Daily(2),
             rsi_config,
             vol_config,
             dynamic_factors,
@@ -136,8 +136,8 @@ impl DCAPresets {
 
     /// High frequency micro DCA
     pub fn micro_dca(base_amount: Decimal) -> DCAConfig {
-        let mut config = Self::conservative(base_amount / Decimal::from(24)); // Smaller amounts
-        config.frequency = DCAFrequency::Hourly(1); // Every hour
+        let mut config = Self::conservative(base_amount / Decimal::from(7)); // Smaller amounts
+        config.frequency = DCAFrequency::Daily(1); // Every day
         config.filters.max_spread_percentage = Some(Decimal::new(1, 3)); // 0.001 = 0.1% max spread
         config
     }
@@ -145,7 +145,7 @@ impl DCAPresets {
     /// Get all available presets with descriptions
     pub fn get_all_presets() -> Vec<(&'static str, &'static str, fn(Decimal) -> DCAConfig)> {
         vec![
-            ("conservative", "Simple daily DCA purchases", Self::conservative),
+            ("conservative", "Simple weekly DCA purchases", Self::conservative),
             ("aggressive_rsi", "RSI-based with aggressive multipliers", Self::aggressive_rsi),
             ("volatility_hunter", "Buy more during high volatility", Self::volatility_hunter),
             ("dip_buyer", "Aggressive purchases on price drops", Self::dip_buyer),
@@ -177,7 +177,7 @@ mod tests {
 
             // micro_dca preset modifies the base amount, so we handle it separately
             if name == "micro_dca" {
-                assert_eq!(config.base_amount, base_amount / Decimal::from(24));
+                assert_eq!(config.base_amount, base_amount / Decimal::from(7));
             } else {
                 assert_eq!(config.base_amount, base_amount);
             }

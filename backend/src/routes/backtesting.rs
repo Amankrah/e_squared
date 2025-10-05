@@ -64,6 +64,19 @@ pub async fn run_backtest(
         })?;
 
     // Prepare config
+    // Auto-enable unlimited capital for DCA strategies
+    let is_dca = request.strategy_name.contains("dca");
+
+    // Extract strategy_type from DCA config if available
+    let strategy_type = if is_dca {
+        request.strategy_parameters.as_ref()
+            .and_then(|params| params.get("strategy_type"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+
     let config = BacktestConfig {
         symbol: request.symbol.clone(),
         interval,
@@ -71,9 +84,11 @@ pub async fn run_backtest(
         end_time,
         initial_balance: request.initial_balance,
         strategy_name: request.strategy_name.clone(),
+        strategy_type,
         strategy_parameters: request.strategy_parameters.clone().unwrap_or(json!({})),
         stop_loss_percentage: request.stop_loss_percentage,
         take_profit_percentage: request.take_profit_percentage,
+        unlimited_capital: is_dca, // Auto-enable for DCA strategies
     };
 
     // Create backtest name
@@ -95,6 +110,7 @@ pub async fn run_backtest(
             request.end_date
         )),
         strategy_name: request.strategy_name.clone(),
+        strategy_type: config.strategy_type.clone(),
         symbol: request.symbol.clone(),
         interval: request.interval.clone(),
         start_date: start_time,
@@ -115,6 +131,7 @@ pub async fn run_backtest(
         largest_loss: rust_decimal::Decimal::from(0),
         average_win: rust_decimal::Decimal::from(0),
         average_loss: rust_decimal::Decimal::from(0),
+        total_invested: rust_decimal::Decimal::from(0),
         strategy_parameters: config.strategy_parameters.clone(),
         trades_data: json!([]),
         equity_curve: json!([]),

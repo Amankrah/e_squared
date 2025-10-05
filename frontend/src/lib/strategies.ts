@@ -195,8 +195,8 @@ export function formatPercentage(value: string | number): string {
 // Default configurations for new strategies
 export const DEFAULT_CONFIGS: Record<StrategyType, StrategyConfig> = {
   dca: {
-    base_amount: 1000,
-    frequency: { Daily: 1 },
+    base_amount: 100,
+    frequency: { Weekly: 1 },
     strategy_type: 'Simple',
     pause_on_high_volatility: false,
     pause_on_bear_market: false,

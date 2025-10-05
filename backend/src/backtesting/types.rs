@@ -11,9 +11,15 @@ pub struct BacktestConfig {
     pub end_time: DateTime<Utc>,
     pub initial_balance: Decimal,
     pub strategy_name: String,
+    /// Sub-strategy type (e.g., "Simple", "RSIBased" for DCA)
+    pub strategy_type: Option<String>,
     pub strategy_parameters: serde_json::Value,
     pub stop_loss_percentage: Option<Decimal>,
     pub take_profit_percentage: Option<Decimal>,
+    /// Enable unlimited capital mode (for DCA strategies)
+    /// When true, capital is "injected" for each buy, simulating ongoing income
+    #[serde(default)]
+    pub unlimited_capital: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +70,8 @@ pub struct BacktestMetrics {
     pub benchmark_return: Option<Decimal>,
     pub alpha: Option<Decimal>,
     pub beta: Option<Decimal>,
+    /// Total amount invested (for DCA strategies)
+    pub total_invested: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +89,8 @@ pub struct Portfolio {
     pub asset_quantity: Decimal,
     pub total_value: Decimal,
     pub initial_value: Decimal,
+    /// Total amount invested (for DCA tracking)
+    pub total_invested: Decimal,
 }
 
 impl Portfolio {
@@ -90,6 +100,7 @@ impl Portfolio {
             asset_quantity: Decimal::ZERO,
             total_value: initial_balance,
             initial_value: initial_balance,
+            total_invested: Decimal::ZERO,
         }
     }
 
@@ -102,10 +113,32 @@ impl Portfolio {
         if self.cash_balance >= total_cost {
             self.cash_balance -= total_cost;
             self.asset_quantity += quantity;
+            self.total_invested += total_cost;
             true
         } else {
             false
         }
+    }
+
+    /// Inject capital for unlimited capital mode (DCA)
+    pub fn inject_capital(&mut self, amount: Decimal) {
+        self.cash_balance += amount;
+    }
+
+    /// Execute buy with capital injection if needed (for DCA unlimited mode)
+    pub fn execute_buy_with_injection(&mut self, price: Decimal, quantity: Decimal) -> bool {
+        let total_cost = price * quantity;
+
+        // Inject exactly the amount needed if insufficient
+        if self.cash_balance < total_cost {
+            let needed = total_cost - self.cash_balance;
+            self.inject_capital(needed);
+        }
+
+        self.cash_balance -= total_cost;
+        self.asset_quantity += quantity;
+        self.total_invested += total_cost;
+        true
     }
 
     pub fn execute_sell(&mut self, price: Decimal, quantity: Decimal) -> bool {

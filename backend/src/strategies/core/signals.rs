@@ -224,7 +224,7 @@ impl StrategySignal {
         reason: String,
     ) -> Self {
         Self {
-            signal_type: StrategySignalType::Enter,
+            signal_type: StrategySignalType::AddToPosition,
             symbol,
             strength: Decimal::new(8, 1), // 0.8
             reason,
