@@ -219,8 +219,7 @@ export const DEFAULT_CONFIGS: Record<StrategyType, StrategyConfig> = {
   },
   grid_trading: {
     grid_count: 10,
-    lower_price: '40000',
-    upper_price: '50000',
+    range_percentage: '10',
     investment_amount: '1000',
     stop_loss_percentage: '5',
     take_profit_percentage: '15'

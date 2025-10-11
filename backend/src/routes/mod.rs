@@ -8,6 +8,7 @@ use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
     dca_strategy_management, rsi_strategy_management, macd_strategy_management,
     sma_crossover_strategy_management, grid_trading_strategy_management, strategy_summary,
+    market_data,
 };
 
 /// Configure all application routes
@@ -26,6 +27,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_grid_trading_routes)
             .configure(configure_exchange_connector_routes)
             .configure(configure_backtesting_routes)
+            .configure(configure_market_data_routes)
             .configure(configure_public_routes)
     )
     .route("/health", web::get().to(health_check));
@@ -231,4 +233,12 @@ fn configure_grid_trading_routes(cfg: &mut web::ServiceConfig) {
 fn configure_backtesting_routes(cfg: &mut web::ServiceConfig) {
     // Use the new backtesting module
     backtesting::configure(cfg);
+}
+
+/// Configure market data routes
+fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/market-data")
+            .route("/{symbol}/current", web::get().to(market_data::get_current_price))
+    );
 }

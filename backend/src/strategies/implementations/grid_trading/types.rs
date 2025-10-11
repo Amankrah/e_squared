@@ -100,8 +100,10 @@ pub struct GridStats {
     pub avg_buy_price: Option<Decimal>,
     /// Average sell price
     pub avg_sell_price: Option<Decimal>,
-    /// Total volume traded
+    /// Total volume traded (sum of all buys and sells)
     pub total_volume: Decimal,
+    /// Total capital deployed (sum of buy orders only)
+    pub total_deployed: Decimal,
     /// Grid efficiency (filled orders / total orders)
     pub grid_efficiency: Decimal,
     /// Maximum inventory reached
@@ -120,6 +122,7 @@ impl Default for GridStats {
             avg_buy_price: None,
             avg_sell_price: None,
             total_volume: Decimal::ZERO,
+            total_deployed: Decimal::ZERO,
             grid_efficiency: Decimal::ZERO,
             max_inventory: Decimal::ZERO,
             min_inventory: Decimal::ZERO,

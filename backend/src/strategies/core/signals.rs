@@ -245,6 +245,64 @@ impl StrategySignal {
         }
     }
 
+    /// Create an add to position signal (grid trading buy)
+    pub fn add_to_position(
+        symbol: String,
+        quantity: QuantityType,
+        reason: String,
+        strength: Option<Decimal>,
+    ) -> Self {
+        Self {
+            signal_type: StrategySignalType::AddToPosition,
+            symbol,
+            strength: strength.unwrap_or(Decimal::new(9, 1)), // 0.9 default
+            reason,
+            action: SignalAction {
+                order_type: OrderType::Market,
+                quantity,
+                price: PriceConstraint::None,
+                time_constraint: Some(TimeConstraint {
+                    immediate: true,
+                    not_before: None,
+                    expires_at: None,
+                    gtc: false,
+                }),
+                risk_management: None,
+            },
+            metadata: SignalMetadata::default(),
+            timestamp: chrono::Utc::now(),
+        }
+    }
+
+    /// Create a reduce position signal (grid trading sell)
+    pub fn reduce_position(
+        symbol: String,
+        quantity: QuantityType,
+        reason: String,
+        strength: Option<Decimal>,
+    ) -> Self {
+        Self {
+            signal_type: StrategySignalType::ReducePosition,
+            symbol,
+            strength: strength.unwrap_or(Decimal::new(9, 1)), // 0.9 default
+            reason,
+            action: SignalAction {
+                order_type: OrderType::Market,
+                quantity,
+                price: PriceConstraint::None,
+                time_constraint: Some(TimeConstraint {
+                    immediate: true,
+                    not_before: None,
+                    expires_at: None,
+                    gtc: false,
+                }),
+                risk_management: None,
+            },
+            metadata: SignalMetadata::default(),
+            timestamp: chrono::Utc::now(),
+        }
+    }
+
     /// Add stop loss to signal
     pub fn with_stop_loss(mut self, stop_loss: StopLossType) -> Self {
         if self.action.risk_management.is_none() {

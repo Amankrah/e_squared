@@ -6,6 +6,7 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::backtesting::types::*;
+use std::collections::VecDeque;
 use crate::backtesting::binance_fetcher::BinanceFetcher;
 use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData};
 use crate::strategies::core::traits::{OrderUpdate, OrderStatus, OrderType as TraitsOrderType};
@@ -63,7 +64,7 @@ impl BacktestEngine {
         debug!("Fetched {} klines for backtesting", historical_data.len());
 
         // Run the backtest simulation
-        let (trades, portfolio) = self.run_simulation(
+        let (trades, portfolio, open_positions) = self.run_simulation(
             &historical_data,
             &mut *strategy,
             config.initial_balance,
@@ -95,6 +96,7 @@ impl BacktestEngine {
             metrics,
             performance_chart,
             execution_time_ms: execution_time,
+            open_positions,
         })
     }
 
@@ -151,10 +153,13 @@ impl BacktestEngine {
         strategy: &mut dyn Strategy,
         initial_balance: Decimal,
         config: &BacktestConfig,
-    ) -> Result<(Vec<BacktestTrade>, Portfolio), AppError> {
+    ) -> Result<(Vec<BacktestTrade>, Portfolio, Vec<OpenPosition>), AppError> {
         let mut portfolio = Portfolio::new(initial_balance);
         let mut trades = Vec::new();
         let mut position_tracker = PositionTracker::new();
+        let mut open_positions: VecDeque<OpenPosition> = VecDeque::new();
+
+        debug!("BACKTEST START - Initial Balance: ${}, Strategy: {}", initial_balance, config.strategy_name);
 
         // Create basic strategy context for initialization
         let init_context = StrategyContext {
@@ -204,6 +209,7 @@ impl BacktestEngine {
                     kline,
                     &mut portfolio,
                     &mut position_tracker,
+                    &mut open_positions,
                     "Strategy signal".to_string(),
                     strategy,
                     &config.symbol,
@@ -239,7 +245,10 @@ impl BacktestEngine {
             portfolio.update_total_value(last_kline.close);
         }
 
-        Ok((trades, portfolio))
+        debug!("BACKTEST END - Final Portfolio Value: ${}, Cash: ${}, Asset Quantity: {}, Total Invested: ${}, Open Positions: {}",
+               portfolio.total_value, portfolio.cash_balance, portfolio.asset_quantity, portfolio.total_invested, open_positions.len());
+
+        Ok((trades, portfolio, open_positions.into_iter().collect()))
     }
 
     /// Execute a trading signal
@@ -249,6 +258,7 @@ impl BacktestEngine {
         kline: &Kline,
         portfolio: &mut Portfolio,
         position_tracker: &mut PositionTracker,
+        open_positions: &mut VecDeque<OpenPosition>,
         reason: String,
         strategy: &mut dyn Strategy,
         symbol: &str,
@@ -318,8 +328,10 @@ impl BacktestEngine {
                 debug!("DCA buy attempt: amount=${}, price={}, quantity={}, cash_balance={}",
                        amount, kline.close, quantity, portfolio.cash_balance);
 
-                // For DCA strategies, use unlimited capital mode
-                let buy_success = if backtest_config.unlimited_capital || backtest_config.strategy_name.contains("dca") {
+                // For DCA strategies, use unlimited capital mode (continuous investment simulation)
+                // Grid trading should use actual capital constraint
+                let is_grid_trading = backtest_config.strategy_name.contains("grid");
+                let buy_success = if !is_grid_trading && (backtest_config.unlimited_capital || backtest_config.strategy_name.contains("dca")) {
                     portfolio.execute_buy_with_injection(kline.close, quantity);
                     true
                 } else {
@@ -329,6 +341,18 @@ impl BacktestEngine {
                 if buy_success {
                     // Update position tracker with new average entry price
                     position_tracker.add_to_position(kline.close, quantity);
+
+                    // Track this as an open position
+                    open_positions.push_back(OpenPosition {
+                        timestamp: kline.close_time,
+                        price: kline.close,
+                        quantity,
+                        total_value: amount,
+                        reason: reason.clone(),
+                    });
+
+                    debug!("BUY EXECUTED - Amount: ${}, Quantity: {}, Price: {}, Cash Remaining: ${}, Total Invested: ${}, Open Positions: {}",
+                           amount, quantity, kline.close, portfolio.cash_balance, portfolio.total_invested, open_positions.len());
 
                     // Notify strategy about order execution
                     let order_update = OrderUpdate {
@@ -356,7 +380,8 @@ impl BacktestEngine {
                         pnl_percentage: None,
                     };
 
-                    debug!("Executed DCA BUY: {} @ {} (total position: {})", quantity, kline.close, position_tracker.entry_quantity);
+                    debug!("Executed DCA BUY: {} @ {} (total position: {}, open positions: {})",
+                           quantity, kline.close, position_tracker.entry_quantity, open_positions.len());
                     Some(trade)
                 } else {
                     warn!("Failed to execute DCA buy - insufficient balance");
@@ -405,8 +430,75 @@ impl BacktestEngine {
                     None
                 }
             }
+            StrategySignalType::ReducePosition => {
+                // Grid trading style - sell from position
+                let quantity = match &signal.action.quantity {
+                    QuantityType::Fixed(qty) => *qty,
+                    QuantityType::PositionPercentage(pct) => position_tracker.entry_quantity * pct / Decimal::from(100),
+                    _ => position_tracker.entry_quantity, // Default to full position
+                };
+
+                // Check if we have enough to sell
+                if portfolio.asset_quantity < quantity {
+                    debug!("Skipping sell signal - insufficient asset quantity ({} < {})", portfolio.asset_quantity, quantity);
+                    return None;
+                }
+
+                if portfolio.execute_sell(kline.close, quantity) {
+                    let pnl_data = position_tracker.close_position(kline.close, quantity);
+
+                    // Remove from open positions (FIFO - remove oldest first)
+                    let mut remaining_to_close = quantity;
+                    while remaining_to_close > Decimal::ZERO && !open_positions.is_empty() {
+                        if let Some(mut open_pos) = open_positions.pop_front() {
+                            if open_pos.quantity <= remaining_to_close {
+                                // Close this entire position
+                                remaining_to_close -= open_pos.quantity;
+                            } else {
+                                // Partially close this position
+                                open_pos.quantity -= remaining_to_close;
+                                open_pos.total_value = open_pos.quantity * open_pos.price;
+                                open_positions.push_front(open_pos);
+                                remaining_to_close = Decimal::ZERO;
+                            }
+                        }
+                    }
+
+                    // Notify strategy about order execution
+                    let order_update = OrderUpdate {
+                        order_id: Uuid::new_v4().to_string(),
+                        symbol: symbol.to_string(),
+                        order_type: TraitsOrderType::Market,
+                        status: OrderStatus::Filled,
+                        quantity,
+                        price: Some(kline.close),
+                        filled_quantity: quantity,
+                        timestamp: kline.close_time,
+                    };
+                    let _ = strategy.on_order_update(&order_update).await;
+
+                    let trade = BacktestTrade {
+                        timestamp: kline.close_time,
+                        trade_type: TradeType::Sell,
+                        price: kline.close,
+                        quantity,
+                        total_value: quantity * kline.close,
+                        portfolio_value: portfolio.total_value,
+                        balance_remaining: portfolio.cash_balance,
+                        reason,
+                        pnl: pnl_data.0,
+                        pnl_percentage: pnl_data.1,
+                    };
+
+                    debug!("Executed GRID SELL: {} @ {} (open positions remaining: {})", quantity, kline.close, open_positions.len());
+                    Some(trade)
+                } else {
+                    warn!("Failed to execute grid sell");
+                    None
+                }
+            }
             _ => {
-                // Handle other signal types (ReducePosition, etc.)
+                // Handle other signal types
                 debug!("Ignoring unsupported signal type: {:?}", signal.signal_type);
                 None
             }
@@ -504,8 +596,10 @@ impl BacktestEngine {
         let initial_value = portfolio.initial_value;
         let total_invested = portfolio.total_invested;
 
-        // Basic returns - for DCA, calculate based on total invested
-        let base_amount = if total_invested > Decimal::ZERO {
+        // Basic returns calculation:
+        // - For unlimited capital mode (DCA): calculate based on total invested
+        // - For fixed capital (grid trading, normal strategies): use initial value
+        let base_amount = if config.unlimited_capital && total_invested > Decimal::ZERO {
             total_invested
         } else {
             initial_value
@@ -602,6 +696,15 @@ impl BacktestEngine {
             None
         };
 
+        // Calculate open trades (buys without sells) and unrealized P&L
+        let open_trades = total_trades - closed_trades;
+
+        // Calculate realized P&L (from closed trades only)
+        let realized_pnl = total_wins - total_losses;
+
+        // Calculate unrealized P&L (total return minus realized P&L)
+        let unrealized_pnl = total_return - realized_pnl;
+
         BacktestMetrics {
             total_return,
             total_return_percentage,
@@ -621,6 +724,10 @@ impl BacktestEngine {
             alpha: None, // Can be calculated if needed
             beta: None,  // Can be calculated if needed
             total_invested,
+            closed_trades,
+            open_trades,
+            realized_pnl,
+            unrealized_pnl,
         }
     }
 

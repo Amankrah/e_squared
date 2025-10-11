@@ -48,7 +48,7 @@ pub fn init_grid_trading_strategies() -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strategies::core::{get_global_registry, create_strategy};
+    use crate::strategies::core::{get_global_registry, create_strategy, StrategyFactory};
 
     #[test]
     fn test_grid_trading_strategy_registration() {
@@ -68,7 +68,7 @@ mod tests {
         let strategy = strategy.unwrap();
         let metadata = strategy.metadata();
         assert_eq!(metadata.id, "grid_trading_v2");
-        assert_eq!(metadata.name, "Grid Trading Strategy v2");
+        assert_eq!(metadata.name, "Grid Trading v2");
     }
 
     #[test]

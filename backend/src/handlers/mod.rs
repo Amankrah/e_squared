@@ -10,5 +10,6 @@ pub mod sma_crossover_strategy_management;
 pub mod grid_trading_strategy_management;
 pub mod strategy_summary;
 pub mod backtest_management;
+pub mod market_data;
 // Removed legacy strategy_templates_handler - using new modular system
 pub use auth::*;

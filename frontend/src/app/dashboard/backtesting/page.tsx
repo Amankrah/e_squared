@@ -24,7 +24,6 @@ import { MACDConfig } from "@/components/strategies/config/macd-config"
 import {
   apiClient,
   StrategyType,
-  StrategyConfig,
   BacktestResult,
   BacktestEngineResult,
   BacktestRequest,
@@ -67,13 +66,14 @@ export default function BacktestingPage() {
   }
 
   // Helper function to convert BacktestEngineResult to BacktestResult format for component compatibility
-  const convertEngineResultToDisplayFormat = (engineResult: BacktestEngineResult): BacktestResult & { equity_curve: any; trades_data: any } => {
+  const convertEngineResultToDisplayFormat = (engineResult: BacktestEngineResult): BacktestResult & { equity_curve: unknown; trades_data: unknown; total_invested?: string } => {
     const symbol = engineResult.config?.symbol || 'BTC'
     const strategyName = engineResult.config?.strategy_name || 'dca_v2'
     const interval = engineResult.config?.interval || '1d'
     // Backend uses start_time/end_time, not start_date/end_date
-    const startDate = (engineResult.config as any)?.start_time || engineResult.config?.start_date || new Date().toISOString()
-    const endDate = (engineResult.config as any)?.end_time || engineResult.config?.end_date || new Date().toISOString()
+    const config = engineResult.config as { start_time?: string; end_time?: string; start_date?: string; end_date?: string; initial_balance?: number; [key: string]: unknown }
+    const startDate = config?.start_time || config?.start_date || new Date().toISOString()
+    const endDate = config?.end_time || config?.end_date || new Date().toISOString()
     const initialBalance = engineResult.config?.initial_balance?.toString() || '10000'
 
     return {
@@ -111,7 +111,7 @@ export default function BacktestingPage() {
       trades_data: engineResult.trades,
       // DCA-specific field
       total_invested: engineResult.metrics.total_invested
-    } as any
+    }
   }
   const [selectedStrategyType, setSelectedStrategyType] = useState<StrategyType>()
   const [customDCAConfig, setCustomDCAConfig] = useState<DCAConfigType | null>(null)
@@ -220,7 +220,7 @@ export default function BacktestingPage() {
     }
   }, [isAuthenticated, authLoading, loadBacktestHistory])
 
-  const handleStrategySelect = (type: StrategyType, _config: StrategyConfig) => {
+  const handleStrategySelect = (type: StrategyType) => {
     setSelectedStrategyType(type)
     setViewMode('configure')
   }
@@ -267,7 +267,17 @@ export default function BacktestingPage() {
     }
   }
 
-  const handleGridTradingBacktest = async (config: GridConfigType, name: string, assetSymbol: string) => {
+  const handleGridTradingBacktest = async (
+    config: GridConfigType,
+    name: string,
+    assetSymbol: string,
+    backtestParams: {
+      start_date: string
+      end_date: string
+      interval: string
+      initial_capital: number
+    }
+  ) => {
     setCustomGridConfig(config)
     setViewMode('running')
 
@@ -275,11 +285,11 @@ export default function BacktestingPage() {
       const request: BacktestRequest = {
         strategy_type: 'grid_trading',
         asset_symbol: assetSymbol || 'BTC',
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        initial_capital: 10000,
+        start_date: backtestParams.start_date,
+        end_date: backtestParams.end_date,
+        initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: '1d'
+        interval: backtestParams.interval
       }
       await handleRunBacktest(request)
     } catch (error) {

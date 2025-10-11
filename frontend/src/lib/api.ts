@@ -427,8 +427,7 @@ export type StrategyType = 'dca' | 'grid_trading' | 'sma_crossover' | 'rsi' | 'm
 // Grid Trading Strategy Types
 export interface GridTradingConfig {
   grid_count: number
-  lower_price: string
-  upper_price: string
+  range_percentage: string  // Percentage range from current price (e.g., "10" for ±10%)
   investment_amount: string
   stop_loss_percentage?: string
   take_profit_percentage?: string
@@ -641,6 +640,14 @@ export interface BacktestResult {
   updated_at: string
 }
 
+export interface OpenPosition {
+  timestamp: string
+  price: string
+  quantity: string
+  total_value: string
+  reason: string
+}
+
 // Backtest engine result (from run backtest endpoint)
 export interface BacktestEngineResult {
   backtest_id: string
@@ -649,6 +656,7 @@ export interface BacktestEngineResult {
   metrics: BacktestEngineMetrics
   performance_chart: PerformancePoint[]
   execution_time_ms: number
+  open_positions?: OpenPosition[]
 }
 
 export interface BacktestEngineMetrics {
@@ -1593,43 +1601,52 @@ class ApiClient {
   }
 
   private transformGridTradingConfig(config: any): any {
+    const rangePercentage = parseFloat(config.range_percentage || '10')
+    const gridLevels = config.grid_count || 10
+
+    // Calculate spacing as: (total range) / (number of levels - 1)
+    // Total range is 2x rangePercentage (upper + lower)
+    // For example: 10% range means ±10%, so total range is 20%
+    const totalRangePercentage = rangePercentage * 2
+    const spacingPercentage = totalRangePercentage / (gridLevels - 1)
+
     return {
-      grid_levels: config.grid_count || 10,
+      grid_levels: gridLevels,
       total_investment: parseFloat(config.investment_amount || '1000'),
       spacing: {
         mode: 'Standard',
-        fixed_spacing: 0.02, // 2% default spacing
+        fixed_spacing: spacingPercentage,
         dynamic_base_pct: null,
         volatility_factor: null,
         geometric_multiplier: null
       },
       bounds: {
-        upper_bound: parseFloat(config.upper_price || '50000'),
-        lower_bound: parseFloat(config.lower_price || '40000'),
-        bounds_type: 'AbsolutePrice',
-        auto_adjust: false,
+        upper_bound: rangePercentage,
+        lower_bound: rangePercentage,
+        bounds_type: 'PercentageFromCenter',
+        auto_adjust: true,
         use_support_resistance: false
       },
       risk_settings: {
         max_inventory: parseFloat(config.investment_amount || '1000') * 0.5,
         stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
         take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
-        max_drawdown_pct: 10.0,
+        max_drawdown_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 15.0,
         max_time_in_position: null,
-        dynamic_adjustment: false,
+        dynamic_adjustment: true,
         volatility_pause_threshold: null
       },
       min_order_size: 10.0,
       max_order_size: null,
-      enable_rebalancing: config.rebalance_threshold ? true : false,
-      rebalancing_interval: 24,
+      enable_rebalancing: true,
+      rebalancing_interval: null, // Only rebalance when price exits bounds
       take_profit_threshold: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
       stop_loss_threshold: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
       market_making: {
         enabled: false,
         spread_pct: 0.2,
         inventory_target: 0.0,
-        max_inventory_deviation: 500.0,
+        max_inventory_deviation: parseFloat(config.investment_amount || '1000') * 0.3,
         inventory_adjustment: true,
         inventory_skew_factor: 0.1
       }

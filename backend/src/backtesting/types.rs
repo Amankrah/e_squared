@@ -29,6 +29,16 @@ pub struct BacktestResult {
     pub metrics: BacktestMetrics,
     pub performance_chart: Vec<PerformancePoint>,
     pub execution_time_ms: u64,
+    pub open_positions: Vec<OpenPosition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenPosition {
+    pub timestamp: DateTime<Utc>,
+    pub price: Decimal,
+    pub quantity: Decimal,
+    pub total_value: Decimal,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +82,14 @@ pub struct BacktestMetrics {
     pub beta: Option<Decimal>,
     /// Total amount invested (for DCA strategies)
     pub total_invested: Decimal,
+    /// Number of closed trades (trades with realized P&L)
+    pub closed_trades: u32,
+    /// Number of open trades (buys without corresponding sells)
+    pub open_trades: u32,
+    /// Realized profit/loss from closed trades
+    pub realized_pnl: Decimal,
+    /// Unrealized profit/loss from open positions
+    pub unrealized_pnl: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

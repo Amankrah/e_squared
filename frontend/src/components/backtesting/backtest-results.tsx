@@ -341,12 +341,15 @@ export function BacktestResults({
       <Card className="bg-white/5 backdrop-blur-xl border border-white/10">
         <CardContent className="p-0">
           <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4 bg-transparent border-b border-white/10">
+            <TabsList className="grid w-full grid-cols-5 bg-transparent border-b border-white/10">
               <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">
                 Overview
               </TabsTrigger>
               <TabsTrigger value="trades" className="data-[state=active]:bg-white/10">
                 Trades
+              </TabsTrigger>
+              <TabsTrigger value="open" className="data-[state=active]:bg-white/10">
+                Open Trades
               </TabsTrigger>
               <TabsTrigger value="metrics" className="data-[state=active]:bg-white/10">
                 Metrics
@@ -461,7 +464,79 @@ export function BacktestResults({
                 )}
               </div>
             </TabsContent>
-            
+
+            <TabsContent value="open" className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white/90">Open Positions</h3>
+                <Badge variant="outline" className="border-orange-500/30 text-orange-400">
+                  {(results as any).open_positions?.length || 0} open
+                </Badge>
+              </div>
+
+              {(results as any).open_positions && Array.isArray((results as any).open_positions) && (results as any).open_positions.length > 0 ? (
+                <>
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 mb-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="text-orange-400 mt-1">
+                        <Target className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-white/90 font-semibold mb-1">Unclosed Positions</h4>
+                        <p className="text-sm text-white/70">
+                          These are buy orders that haven't been matched with sell orders yet.
+                          For grid trading, this happens when price moves away before the sell level is hit.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {(results as any).open_positions.map((position: any, index: number) => {
+                      const currentPrice = parseFloat(results.final_balance) // Simplified - you'd want actual last price
+                      const entryPrice = parseFloat(position.price)
+                      const quantity = parseFloat(position.quantity)
+                      const unrealizedPnl = (currentPrice - entryPrice) * quantity
+                      const unrealizedPnlPct = ((currentPrice - entryPrice) / entryPrice) * 100
+
+                      return (
+                        <div key={index} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1">
+                              <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-white/90">
+                                  BUY @ {formatCurrency(position.price)}
+                                </div>
+                                <div className="text-xs text-white/60 mt-0.5">
+                                  {new Date(position.timestamp).toLocaleDateString()} • Qty: {parseFloat(position.quantity).toFixed(6)}
+                                </div>
+                                <div className="text-xs text-white/50 mt-0.5">
+                                  {position.reason || 'Grid level'}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-orange-400">
+                                {formatCurrency(position.total_value)}
+                              </div>
+                              <div className="text-xs text-white/60">
+                                Value at entry
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="p-6 bg-white/5 rounded-lg text-center">
+                  <div className="text-white/60 mb-2">No open positions</div>
+                  <div className="text-xs text-white/50">All buy orders have been closed with sell orders</div>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="metrics" className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Trading Stats */}
