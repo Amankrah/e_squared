@@ -126,12 +126,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true)
       setError(null)
       setIsNavigating(true) // Prevent auth redirects during login
-      
+
       const response = await apiClient.login(credentials)
       setUser(response.user)
 
-      // Try to load profile
-      await refreshProfile()
+      // Try to load profile (silent mode - don't fail login if profile doesn't exist)
+      await refreshProfile(true)
 
       router.push('/dashboard')
     } catch (error) {

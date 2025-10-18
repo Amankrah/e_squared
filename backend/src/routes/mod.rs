@@ -240,5 +240,6 @@ fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/market-data")
             .route("/{symbol}/current", web::get().to(market_data::get_current_price))
+            .route("/dxy", web::get().to(market_data::get_dxy))
     );
 }

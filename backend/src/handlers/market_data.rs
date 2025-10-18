@@ -6,6 +6,7 @@ use std::str::FromStr;
 use tracing::{info, error, debug};
 
 use crate::utils::errors::AppError;
+use crate::services::DxyService;
 
 const BINANCE_API_BASE: &str = "https://api.binance.com";
 
@@ -90,4 +91,17 @@ pub async fn get_current_price(
     info!("Current price for {}: ${}", symbol, price_f64);
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+/// Get current DXY (US Dollar Index) value
+pub async fn get_dxy(
+    dxy_service: web::Data<DxyService>,
+) -> Result<HttpResponse, AppError> {
+    info!("Fetching DXY (US Dollar Index) data");
+
+    let dxy_data = dxy_service.get_dxy().await?;
+
+    info!("DXY value: {}", dxy_data.value);
+
+    Ok(HttpResponse::Ok().json(dxy_data))
 }
