@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS grid_trading_executions (
+    id TEXT PRIMARY KEY,
+    strategy_id TEXT NOT NULL,
+    exchange_connection_id TEXT NOT NULL,
+    execution_type TEXT NOT NULL,
+    trigger_reason TEXT NOT NULL,
+    amount_usd REAL NOT NULL,
+    amount_asset REAL NOT NULL,
+    price_at_execution REAL NOT NULL,
+    grid_level_index INTEGER NOT NULL,
+    grid_level_price REAL NOT NULL,
+    inventory_before REAL NOT NULL,
+    inventory_after REAL NOT NULL,
+    grid_profit REAL,
+    order_id TEXT,
+    order_status TEXT NOT NULL,
+    execution_timestamp TEXT NOT NULL,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (strategy_id) REFERENCES grid_trading_strategies (id) ON DELETE CASCADE,
+    FOREIGN KEY (exchange_connection_id) REFERENCES exchange_connections (id) ON DELETE CASCADE
+);

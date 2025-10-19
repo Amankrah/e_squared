@@ -530,21 +530,25 @@ impl Strategy for SMACrossoverStrategy {
         // Determine trade action
         let (signal_type, side) = match analysis.signal {
             CrossoverSignal::BullishCrossover => {
-                if enable_long && self.state.position != 1 {
+                // Close short position or open long position
+                if self.state.position == -1 {
+                    // Close short position
+                    (Some("buy"), Some(TradeSide::Buy))
+                } else if enable_long && self.state.position != 1 {
+                    // Open new long position
                     (Some("buy"), Some(TradeSide::Buy))
                 } else {
                     (None, None)
                 }
             }
             CrossoverSignal::BearishCrossover => {
-                if enable_short && self.state.position != -1 {
-                    if self.state.position == 1 {
-                        // Close long position
-                        (Some("sell"), Some(TradeSide::Sell))
-                    } else {
-                        // Open short position (if enabled)
-                        (Some("sell"), Some(TradeSide::Sell))
-                    }
+                // Close long position or open short position
+                if self.state.position == 1 {
+                    // Always close long positions on bearish crossover
+                    (Some("sell"), Some(TradeSide::Sell))
+                } else if enable_short && self.state.position != -1 {
+                    // Open new short position (only if enabled)
+                    (Some("sell"), Some(TradeSide::Sell))
                 } else {
                     (None, None)
                 }

@@ -7,8 +7,6 @@ use std::sync::Arc;
 use crate::handlers::AuthService;
 use crate::utils::errors::AppError;
 use crate::models::dca_strategy::Entity as DCAStrategyEntity;
-use crate::models::rsi_strategy::Entity as RSIStrategyEntity;
-use crate::models::macd_strategy::Entity as MACDStrategyEntity;
 use crate::models::sma_crossover_strategy::Entity as SMACrossoverStrategyEntity;
 use crate::models::grid_trading_strategy::Entity as GridTradingStrategyEntity;
 
@@ -100,54 +98,6 @@ async fn get_authenticated_user_summary(
         });
         total_strategies += dca_count;
         total_active += dca_active_count;
-    }
-
-    // Get RSI strategy counts
-    let rsi_count = RSIStrategyEntity::find()
-        .filter(crate::models::rsi_strategy::Column::UserId.eq(user_id))
-        .count(db.get_ref().as_ref())
-        .await
-        .map_err(AppError::DatabaseError)? as u32;
-
-    let rsi_active_count = RSIStrategyEntity::find()
-        .filter(crate::models::rsi_strategy::Column::UserId.eq(user_id))
-        .filter(crate::models::rsi_strategy::Column::Status.eq("active"))
-        .count(db.get_ref().as_ref())
-        .await
-        .map_err(AppError::DatabaseError)? as u32;
-
-    if rsi_count > 0 {
-        strategy_types.push(StrategyTypeSummary {
-            strategy_type: "rsi".to_string(),
-            count: rsi_count,
-            has_active: rsi_active_count > 0,
-        });
-        total_strategies += rsi_count;
-        total_active += rsi_active_count;
-    }
-
-    // Get MACD strategy counts
-    let macd_count = MACDStrategyEntity::find()
-        .filter(crate::models::macd_strategy::Column::UserId.eq(user_id))
-        .count(db.get_ref().as_ref())
-        .await
-        .map_err(AppError::DatabaseError)? as u32;
-
-    let macd_active_count = MACDStrategyEntity::find()
-        .filter(crate::models::macd_strategy::Column::UserId.eq(user_id))
-        .filter(crate::models::macd_strategy::Column::Status.eq("active"))
-        .count(db.get_ref().as_ref())
-        .await
-        .map_err(AppError::DatabaseError)? as u32;
-
-    if macd_count > 0 {
-        strategy_types.push(StrategyTypeSummary {
-            strategy_type: "macd".to_string(),
-            count: macd_count,
-            has_active: macd_active_count > 0,
-        });
-        total_strategies += macd_count;
-        total_active += macd_active_count;
     }
 
     // Get SMA Crossover strategy counts

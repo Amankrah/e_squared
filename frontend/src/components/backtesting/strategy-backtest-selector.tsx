@@ -22,7 +22,7 @@ export function StrategyBacktestSelector({
   onConfigureStrategy,
   className
 }: StrategyBacktestSelectorProps) {
-  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover', 'rsi', 'macd']
+  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover']
   const [hoveredStrategy, setHoveredStrategy] = useState<StrategyType | null>(null)
 
   const handleStrategySelect = (type: StrategyType) => {

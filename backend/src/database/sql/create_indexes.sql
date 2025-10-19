@@ -26,6 +26,24 @@ CREATE INDEX IF NOT EXISTS idx_dca_strategies_next_execution ON dca_strategies(n
 CREATE INDEX IF NOT EXISTS idx_dca_executions_strategy_id ON dca_executions(strategy_id);
 CREATE INDEX IF NOT EXISTS idx_dca_executions_timestamp ON dca_executions(execution_timestamp);
 
+-- Grid Trading strategy indexes
+CREATE INDEX IF NOT EXISTS idx_grid_trading_strategies_user_id ON grid_trading_strategies(user_id);
+CREATE INDEX IF NOT EXISTS idx_grid_trading_strategies_status ON grid_trading_strategies(status);
+CREATE INDEX IF NOT EXISTS idx_grid_trading_strategies_asset_symbol ON grid_trading_strategies(asset_symbol);
+
+-- Grid Trading execution indexes
+CREATE INDEX IF NOT EXISTS idx_grid_trading_executions_strategy_id ON grid_trading_executions(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_grid_trading_executions_timestamp ON grid_trading_executions(execution_timestamp);
+
+-- SMA Crossover strategy indexes
+CREATE INDEX IF NOT EXISTS idx_sma_crossover_strategies_user_id ON sma_crossover_strategies(user_id);
+CREATE INDEX IF NOT EXISTS idx_sma_crossover_strategies_status ON sma_crossover_strategies(status);
+CREATE INDEX IF NOT EXISTS idx_sma_crossover_strategies_asset_symbol ON sma_crossover_strategies(asset_symbol);
+
+-- SMA Crossover execution indexes
+CREATE INDEX IF NOT EXISTS idx_sma_crossover_executions_strategy_id ON sma_crossover_executions(strategy_id);
+CREATE INDEX IF NOT EXISTS idx_sma_crossover_executions_timestamp ON sma_crossover_executions(execution_timestamp);
+
 -- Market data indexes
 CREATE INDEX IF NOT EXISTS idx_market_data_symbol ON market_data(asset_symbol);
 CREATE INDEX IF NOT EXISTS idx_market_data_timestamp ON market_data(timestamp);

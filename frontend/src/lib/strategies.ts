@@ -5,9 +5,7 @@ import {
   StrategyConfig,
   DCAStrategy,
   GridTradingStrategy,
-  SMACrossoverStrategy,
-  RSIStrategy,
-  MACDStrategy
+  SMACrossoverStrategy
 } from './api'
 
 // Strategy metadata for UI
@@ -62,40 +60,6 @@ export const STRATEGY_INFO: Record<StrategyType, StrategyInfo> = {
       'Momentum validation'
     ],
     minInvestment: 250
-  },
-  rsi: {
-    type: 'rsi',
-    name: 'RSI Strategy',
-    description: 'Trade based on Relative Strength Index overbought/oversold conditions',
-    icon: '⚡',
-    color: 'from-yellow-500/20 to-orange-500/20',
-    riskLevel: 'High',
-    timeHorizon: 'Short-term (1-8 weeks)',
-    features: [
-      'RSI-based entry/exit signals',
-      'Overbought/oversold detection',
-      'Configurable thresholds',
-      'Signal strength analysis',
-      'Market reversal timing'
-    ],
-    minInvestment: 200
-  },
-  macd: {
-    type: 'macd',
-    name: 'MACD Strategy',
-    description: 'Use MACD indicator crossovers and divergences for trading signals',
-    icon: '🌊',
-    color: 'from-indigo-500/20 to-blue-500/20',
-    riskLevel: 'High',
-    timeHorizon: 'Short-term (2-12 weeks)',
-    features: [
-      'MACD line crossover signals',
-      'Histogram divergence analysis',
-      'Signal line confirmations',
-      'Momentum trend detection',
-      'Multi-timeframe analysis'
-    ],
-    minInvestment: 300
   }
 }
 
@@ -117,7 +81,23 @@ export const RISK_LEVEL_COLORS = {
 
 // Utility functions
 export function getStrategyInfo(type: StrategyType): StrategyInfo {
-  return STRATEGY_INFO[type]
+  const info = STRATEGY_INFO[type]
+  if (!info) {
+    console.warn(`Strategy info not found for type: ${type}`)
+    // Return a fallback info object
+    return {
+      type,
+      name: type.toUpperCase(),
+      description: 'Strategy information not available',
+      icon: '📊',
+      color: 'from-gray-500/20 to-gray-600/20',
+      riskLevel: 'Medium',
+      timeHorizon: 'Medium-term',
+      features: [],
+      minInvestment: 100
+    }
+  }
+  return info
 }
 
 export function getStrategyIcon(type: StrategyType): string {
@@ -151,16 +131,9 @@ export function isGridTradingStrategy(strategy: Strategy): strategy is GridTradi
 }
 
 export function isSMACrossoverStrategy(strategy: Strategy): strategy is SMACrossoverStrategy {
-  return 'config' in strategy && typeof strategy.config === 'object' && 'short_period' in strategy.config
-}
-
-export function isRSIStrategy(strategy: Strategy): strategy is RSIStrategy {
-  return 'config' in strategy && typeof strategy.config === 'object' && 'rsi_period' in strategy.config
-}
-
-export function isMACDStrategy(strategy: Strategy): strategy is MACDStrategy {
   return 'config' in strategy && typeof strategy.config === 'object' && 'fast_period' in strategy.config
 }
+
 
 // Strategy performance helpers
 export function calculateProfitLossPercentage(totalInvested: string, currentProfitLoss: string): number {
@@ -225,28 +198,39 @@ export const DEFAULT_CONFIGS: Record<StrategyType, StrategyConfig> = {
     take_profit_percentage: '15'
   },
   sma_crossover: {
-    short_period: 20,
-    long_period: 50,
-    investment_amount: '500',
-    stop_loss_percentage: '5',
-    take_profit_percentage: '10',
-    confirmation_period: 2
-  },
-  rsi: {
-    rsi_period: 14,
-    oversold_threshold: 30,
-    overbought_threshold: 70,
-    investment_amount: '300',
-    stop_loss_percentage: '3',
-    take_profit_percentage: '8'
-  },
-  macd: {
-    fast_period: 12,
-    slow_period: 26,
-    signal_period: 9,
-    investment_amount: '400',
-    stop_loss_percentage: '4',
-    take_profit_percentage: '12'
+    fast_period: 0, // User must configure
+    slow_period: 0, // User must configure
+    position_size_pct: 0, // User must configure
+    enable_long: true,
+    enable_short: false,
+    use_market_orders: true,
+    risk_settings: {
+      stop_loss_pct: 0,
+      take_profit_pct: 0,
+      max_position_pct: 100,
+      min_signal_interval: 0,
+      trailing_stop: false,
+      trailing_stop_pct: undefined
+    },
+    filters: {
+      min_volume: undefined,
+      max_spread_pct: undefined,
+      rsi_overbought: undefined,
+      rsi_oversold: undefined,
+      macd_confirmation: false,
+      min_sma_spread_pct: undefined
+    },
+    confirmation_indicators: {
+      use_rsi: false,
+      rsi_period: 14,
+      use_macd: false,
+      macd_fast: 12,
+      macd_slow: 26,
+      macd_signal: 9,
+      use_volume: false,
+      volume_period: 20,
+      min_volume_multiplier: 1
+    }
   }
 }
 
@@ -323,34 +307,6 @@ export function validateDCAFrequency(frequencyType: string, frequencyValue: numb
       break
   }
 
-  return null
-}
-
-export function validateRSIConfig(config: {
-  period: number
-  oversold: number
-  overbought: number
-  oversoldMultiplier: number
-  overboughtMultiplier: number
-}): string | null {
-  if (config.period < 2 || config.period > 100) {
-    return 'RSI period must be between 2 and 100'
-  }
-  if (config.oversold <= 0 || config.oversold >= 100) {
-    return 'RSI oversold threshold must be between 0 and 100'
-  }
-  if (config.overbought <= 0 || config.overbought >= 100) {
-    return 'RSI overbought threshold must be between 0 and 100'
-  }
-  if (config.oversold >= config.overbought) {
-    return 'RSI oversold threshold must be less than overbought threshold'
-  }
-  if (config.oversoldMultiplier < 0 || config.oversoldMultiplier > 10) {
-    return 'RSI oversold multiplier must be between 0 and 10'
-  }
-  if (config.overboughtMultiplier < 0 || config.overboughtMultiplier > 10) {
-    return 'RSI overbought multiplier must be between 0 and 10'
-  }
   return null
 }
 

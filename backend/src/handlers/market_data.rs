@@ -6,7 +6,7 @@ use std::str::FromStr;
 use tracing::{info, error, debug};
 
 use crate::utils::errors::AppError;
-use crate::services::DxyService;
+use crate::services::{DxyService, MarketIndicatorsService};
 
 const BINANCE_API_BASE: &str = "https://api.binance.com";
 
@@ -104,4 +104,43 @@ pub async fn get_dxy(
     info!("DXY value: {}", dxy_data.value);
 
     Ok(HttpResponse::Ok().json(dxy_data))
+}
+
+/// Get Bitcoin Dominance
+pub async fn get_btc_dominance(
+    market_indicators: web::Data<MarketIndicatorsService>,
+) -> Result<HttpResponse, AppError> {
+    info!("Fetching Bitcoin Dominance data");
+
+    let btc_dom = market_indicators.get_btc_dominance().await?;
+
+    info!("BTC Dominance: {}%", btc_dom.value);
+
+    Ok(HttpResponse::Ok().json(btc_dom))
+}
+
+/// Get M2 Money Supply
+pub async fn get_m2(
+    market_indicators: web::Data<MarketIndicatorsService>,
+) -> Result<HttpResponse, AppError> {
+    info!("Fetching M2 Money Supply data");
+
+    let m2_data = market_indicators.get_m2().await?;
+
+    info!("M2 Money Supply: ${} billion", m2_data.value);
+
+    Ok(HttpResponse::Ok().json(m2_data))
+}
+
+/// Get Bitcoin Price
+pub async fn get_btc_price(
+    market_indicators: web::Data<MarketIndicatorsService>,
+) -> Result<HttpResponse, AppError> {
+    info!("Fetching Bitcoin Price data");
+
+    let btc_price = market_indicators.get_btc_price().await?;
+
+    info!("BTC Price: ${}", btc_price.price);
+
+    Ok(HttpResponse::Ok().json(btc_price))
 }

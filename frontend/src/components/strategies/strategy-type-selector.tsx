@@ -17,7 +17,7 @@ export function StrategyTypeSelector({
   onTypeSelect,
   className
 }: StrategyTypeSelectorProps) {
-  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover', 'rsi', 'macd']
+  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover']
 
   return (
     <div className={cn("grid gap-6", className)}>

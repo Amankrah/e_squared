@@ -8,36 +8,42 @@ use rust_decimal::Decimal;
 
 use crate::utils::errors::AppError;
 
-/// Twelve Data API error response
+/// Yahoo Finance API response for DXY quote
 #[derive(Debug, Deserialize)]
-pub struct TwelveDataError {
-    pub code: Option<i32>,
-    pub message: Option<String>,
-    pub status: Option<String>,
+pub struct YahooFinanceResponse {
+    pub chart: YahooChart,
 }
 
-/// Twelve Data API response for DXY quote
 #[derive(Debug, Deserialize)]
-pub struct TwelveDataQuote {
-    pub symbol: Option<String>,
-    pub name: Option<String>,
-    pub exchange: Option<String>,
-    pub currency: Option<String>,
-    pub datetime: Option<String>,
-    pub timestamp: Option<i64>,
-    pub open: Option<String>,
-    pub high: Option<String>,
-    pub low: Option<String>,
-    pub close: Option<String>,
-    pub previous_close: Option<String>,
-    pub change: Option<String>,
-    pub percent_change: Option<String>,
-    pub average_volume: Option<String>,
-    pub volume: Option<String>,
-    // Error fields in case API returns error
-    pub code: Option<i32>,
-    pub message: Option<String>,
-    pub status: Option<String>,
+pub struct YahooChart {
+    pub result: Vec<YahooResult>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct YahooResult {
+    pub meta: YahooMeta,
+    pub timestamp: Option<Vec<i64>>,
+    pub indicators: YahooIndicators,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YahooMeta {
+    pub regular_market_price: Option<f64>,
+    pub chart_previous_close: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct YahooIndicators {
+    pub quote: Vec<YahooQuote>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct YahooQuote {
+    pub open: Option<Vec<Option<f64>>>,
+    pub high: Option<Vec<Option<f64>>>,
+    pub low: Option<Vec<Option<f64>>>,
+    pub close: Option<Vec<Option<f64>>>,
 }
 
 /// DXY (US Dollar Index) data model
@@ -86,11 +92,10 @@ impl RateLimiter {
     }
 }
 
-/// DXY Service for fetching US Dollar Index data
+/// DXY Service for fetching US Dollar Index data from Yahoo Finance
 #[derive(Clone)]
 pub struct DxyService {
     client: Client,
-    api_key: Option<String>,
     rate_limiter: RateLimiter,
     cached_data: Arc<RwLock<Option<(DxyData, Instant)>>>,
     cache_duration: Duration,
@@ -98,15 +103,13 @@ pub struct DxyService {
 
 impl DxyService {
     /// Create a new DXY service
-    /// api_key is optional - if not provided, will attempt to use free tier
-    pub fn new(api_key: Option<String>) -> Self {
+    pub fn new(_api_key: Option<String>) -> Self {
         Self {
             client: Client::builder()
                 .timeout(Duration::from_secs(30))
                 .build()
                 .expect("Failed to create HTTP client"),
-            api_key,
-            rate_limiter: RateLimiter::new(8000), // 8 seconds between calls for free tier
+            rate_limiter: RateLimiter::new(2000), // 2 seconds between calls
             cached_data: Arc::new(RwLock::new(None)),
             cache_duration: Duration::from_secs(300), // Cache for 5 minutes
         }
@@ -137,113 +140,103 @@ impl DxyService {
         Ok(dxy_data)
     }
 
-    /// Fetch DXY data from Twelve Data API
-    /// Using USD/JPY as proxy for dollar strength since DXY symbol may not be available
+    /// Fetch DXY data from Yahoo Finance API
+    /// DXY is available on Yahoo Finance as DX-Y.NYB
     async fn fetch_dxy_from_api(&self) -> Result<DxyData, AppError> {
         self.rate_limiter.wait_if_needed().await;
 
-        // Try DXY first, fall back to USD/JPY if not available
-        let symbols_to_try = vec!["DXY", "USD/JPY"];
+        // Yahoo Finance DXY symbol
+        let symbol = "DX-Y.NYB";
+        let url = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}?interval=1d&range=5d", symbol);
 
-        for symbol in symbols_to_try {
-        let mut url = format!("https://api.twelvedata.com/quote?symbol={}&interval=1day", symbol);
-
-        if let Some(ref api_key) = self.api_key {
-            url.push_str(&format!("&apikey={}", api_key));
-        }
-
-        debug!("Fetching DXY data from Twelve Data API");
+        debug!("Fetching DXY data from Yahoo Finance API");
 
         let response = self.client
             .get(&url)
-            .header("User-Agent", "E-Squared Trading Platform 1.0")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .send()
             .await
             .map_err(|e| {
-                error!("Failed to fetch DXY data: {}", e);
+                error!("Failed to fetch DXY data from Yahoo Finance: {}", e);
                 AppError::InternalServerError
             })?;
 
         if !response.status().is_success() {
-            warn!("Twelve Data API returned status: {}", response.status());
-
-            // Try to parse error response
+            warn!("Yahoo Finance API returned status: {}", response.status());
             if let Ok(text) = response.text().await {
                 error!("API error response: {}", text);
             }
-
             return Err(AppError::InternalServerError);
         }
 
-        // Get the response text for debugging
-        let response_text = response.text().await.map_err(|e| {
-            error!("Failed to get response text: {}", e);
-            AppError::InternalServerError
-        })?;
-
-        debug!("Twelve Data API response: {}", response_text);
-
-        let quote: TwelveDataQuote = serde_json::from_str(&response_text)
+        let yahoo_response: YahooFinanceResponse = response.json()
+            .await
             .map_err(|e| {
-                error!("Failed to parse Twelve Data response: {}", e);
-                error!("Response was: {}", response_text);
+                error!("Failed to parse Yahoo Finance response: {}", e);
                 AppError::InternalServerError
             })?;
 
-        // Check if the response is an error
-        if let Some(code) = quote.code {
-            let message = quote.message.clone().unwrap_or_else(|| "Unknown API error".to_string());
-            warn!("Twelve Data API error for symbol {} - code: {}, message: {}", symbol, code, message);
-            continue; // Try next symbol
-        }
+        // Extract data from response
+        let result = yahoo_response.chart.result.first()
+            .ok_or_else(|| {
+                error!("No results in Yahoo Finance response");
+                AppError::InternalServerError
+            })?;
 
-        // Parse the data - if it fails, try next symbol
-        let value = match quote.close
-            .as_ref()
-            .or(quote.open.as_ref())
-            .and_then(|s| s.parse::<f64>().ok())
-            .and_then(|v| Decimal::try_from(v).ok()) {
-            Some(v) => v,
-            None => {
-                warn!("Failed to parse value for symbol {}", symbol);
-                continue; // Try next symbol
-            }
+        let current_price = result.meta.regular_market_price
+            .ok_or_else(|| {
+                error!("No regular market price in Yahoo Finance response");
+                AppError::InternalServerError
+            })?;
+
+        let previous_close = result.meta.chart_previous_close.unwrap_or(current_price);
+
+        let value = Decimal::try_from(current_price)
+            .map_err(|e| {
+                error!("Failed to convert DXY value to Decimal: {}", e);
+                AppError::InternalServerError
+            })?;
+
+        // Calculate change
+        let change_val = current_price - previous_close;
+        let change = Decimal::try_from(change_val).ok();
+
+        // Calculate percent change
+        let percent_change_val = if previous_close != 0.0 {
+            (change_val / previous_close) * 100.0
+        } else {
+            0.0
+        };
+        let percent_change = Decimal::try_from(percent_change_val).ok();
+
+        // Get high/low from quote data
+        let quote = result.indicators.quote.first();
+        let (high_24h, low_24h) = if let Some(q) = quote {
+            let high = q.high.as_ref()
+                .and_then(|h| h.iter().filter_map(|v| *v).max_by(|a, b| a.partial_cmp(b).unwrap()))
+                .and_then(|v| Decimal::try_from(v).ok());
+
+            let low = q.low.as_ref()
+                .and_then(|l| l.iter().filter_map(|v| *v).min_by(|a, b| a.partial_cmp(b).unwrap()))
+                .and_then(|v| Decimal::try_from(v).ok());
+
+            (high, low)
+        } else {
+            (None, None)
         };
 
-        let change = quote.change
-            .and_then(|s| s.parse::<f64>().ok())
-            .and_then(|v| Decimal::try_from(v).ok());
+        let timestamp = chrono::Utc::now().timestamp();
 
-        let percent_change = quote.percent_change
-            .and_then(|s| s.parse::<f64>().ok())
-            .and_then(|v| Decimal::try_from(v).ok());
+        info!("Successfully fetched DXY data from Yahoo Finance: {}", value);
 
-        let high_24h = quote.high
-            .and_then(|s| s.parse::<f64>().ok())
-            .and_then(|v| Decimal::try_from(v).ok());
-
-        let low_24h = quote.low
-            .and_then(|s| s.parse::<f64>().ok())
-            .and_then(|v| Decimal::try_from(v).ok());
-
-        let timestamp = quote.timestamp
-            .unwrap_or_else(|| chrono::Utc::now().timestamp());
-
-        info!("Successfully fetched DXY data using symbol: {}", symbol);
-
-        return Ok(DxyData {
+        Ok(DxyData {
             value,
             change,
             percent_change,
             high_24h,
             low_24h,
             timestamp,
-        });
-        } // End of for loop
-
-        // If we get here, none of the symbols worked
-        error!("Failed to fetch DXY data from all attempted symbols");
-        Err(AppError::InternalServerError)
+        })
     }
 
     /// Clear the cache (useful for testing or forcing a refresh)
@@ -255,9 +248,7 @@ impl DxyService {
 
 impl Default for DxyService {
     fn default() -> Self {
-        // Try to get API key from environment
-        let api_key = std::env::var("TWELVE_DATA_API_KEY").ok();
-        Self::new(api_key)
+        Self::new(None)
     }
 }
 
@@ -268,12 +259,6 @@ mod tests {
     #[tokio::test]
     async fn test_dxy_service_creation() {
         let service = DxyService::new(None);
-        assert!(service.api_key.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_dxy_service_with_api_key() {
-        let service = DxyService::new(Some("test_key".to_string()));
-        assert!(service.api_key.is_some());
+        assert!(service.cached_data.read().await.is_none());
     }
 }

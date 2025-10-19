@@ -6,9 +6,8 @@ use crate::middleware::auth::AuthMiddleware;
 
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management,
-    dca_strategy_management, rsi_strategy_management, macd_strategy_management,
-    sma_crossover_strategy_management, grid_trading_strategy_management, strategy_summary,
-    market_data,
+    dca_strategy_management, sma_crossover_strategy_management,
+    grid_trading_strategy_management, strategy_summary, market_data,
 };
 
 /// Configure all application routes
@@ -21,8 +20,6 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_session_routes)
             .configure(configure_exchange_routes)
             .configure(configure_dca_routes)
-            .configure(configure_rsi_routes)
-            .configure(configure_macd_routes)
             .configure(configure_sma_crossover_routes)
             .configure(configure_grid_trading_routes)
             .configure(configure_exchange_connector_routes)
@@ -39,35 +36,51 @@ async fn health_check() -> HttpResponse {
         "status": "healthy",
         "platform": "E² Algorithmic Trading Platform",
         "version": "1.0.0",
-        "description": "Professional algorithmic trading platform with backtesting and live execution",
+        "description": "Professional algorithmic trading platform for CEX & DEX with backtesting and automated execution",
         "features": {
             "strategies": [
                 "DCA (Dollar Cost Averaging)",
-                "SMA Crossover",
                 "Grid Trading",
-                "RSI (Relative Strength Index)",
-                "MACD (Moving Average Convergence Divergence)"
+                "SMA Crossover"
             ],
             "capabilities": [
-                "Real-time strategy execution",
+                "Automated strategy execution",
                 "Historical backtesting",
-                "Multi-exchange support",
-                "Risk management",
+                "CEX & DEX support",
+                "Non-custodial trading",
+                "Real-time market indicators",
                 "Performance analytics"
             ],
-            "exchanges": [
-                "Binance",
-                "More exchanges coming soon"
+            "platforms": {
+                "cex": [
+                    "Binance",
+                    "Coinbase (coming soon)",
+                    "Kraken (coming soon)"
+                ],
+                "dex": [
+                    "Uniswap (coming soon)",
+                    "PancakeSwap (coming soon)",
+                    "Wallet Connect integration"
+                ]
+            }
+        },
+        "market_data": {
+            "indicators": [
+                "DXY (US Dollar Index)",
+                "Bitcoin Price",
+                "Bitcoin Dominance",
+                "M2 Money Supply"
             ]
         },
         "api": {
             "version": "v1",
             "endpoints": {
-                "auth": "/api/auth",
-                "strategies": "/api/strategies",
-                "backtesting": "/api/backtesting",
-                "exchanges": "/api/exchanges",
-                "profiles": "/api/profile"
+                "auth": "/api/v1/auth",
+                "strategies": "/api/v1/strategies",
+                "backtesting": "/api/v1/backtesting",
+                "exchanges": "/api/v1/exchanges",
+                "market_data": "/api/v1/market-data",
+                "profile": "/api/v1/profile"
             }
         },
         "timestamp": chrono::Utc::now().to_rfc3339()
@@ -163,33 +176,6 @@ fn configure_dca_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
-/// Configure RSI strategy routes
-fn configure_rsi_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/rsi")
-            .route("/strategies", web::post().to(rsi_strategy_management::create_rsi_strategy))
-            .route("/strategies", web::get().to(rsi_strategy_management::get_rsi_strategies))
-            .route("/strategies/{strategy_id}", web::get().to(rsi_strategy_management::get_rsi_strategy))
-            .route("/strategies/{strategy_id}", web::put().to(rsi_strategy_management::update_rsi_strategy))
-            .route("/strategies/{strategy_id}", web::delete().to(rsi_strategy_management::delete_rsi_strategy))
-            .route("/execution-stats", web::get().to(rsi_strategy_management::get_rsi_execution_stats))
-    );
-}
-
-/// Configure MACD strategy routes
-fn configure_macd_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/macd")
-            .route("/strategies", web::post().to(macd_strategy_management::create_macd_strategy))
-            .route("/strategies", web::get().to(macd_strategy_management::get_macd_strategies))
-            .route("/strategies/{strategy_id}", web::get().to(macd_strategy_management::get_macd_strategy))
-            .route("/strategies/{strategy_id}", web::put().to(macd_strategy_management::update_macd_strategy))
-            .route("/strategies/{strategy_id}", web::delete().to(macd_strategy_management::delete_macd_strategy))
-            .route("/execution-stats", web::get().to(macd_strategy_management::get_macd_execution_stats))
-    );
-}
-
-
 /// Configure exchange connector routes
 fn configure_exchange_connector_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -241,5 +227,8 @@ fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
         web::scope("/market-data")
             .route("/{symbol}/current", web::get().to(market_data::get_current_price))
             .route("/dxy", web::get().to(market_data::get_dxy))
+            .route("/btc-dominance", web::get().to(market_data::get_btc_dominance))
+            .route("/m2", web::get().to(market_data::get_m2))
+            .route("/btc-price", web::get().to(market_data::get_btc_price))
     );
 }

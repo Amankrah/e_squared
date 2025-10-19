@@ -23,6 +23,7 @@ import { MultiStrategyOverview } from "@/components/dashboard/multi-strategy-ove
 import { StrategyTypeStats } from "@/components/dashboard/strategy-type-stats"
 import { QuickActionsPanel } from "@/components/dashboard/quick-actions-panel"
 import { DxyIndicator } from "@/components/dashboard/dxy-indicator"
+import { BtcDominanceIndicator, M2Indicator, BtcPriceIndicator } from "@/components/dashboard/market-indicators"
 import { apiClient, DCAStrategy, ExchangeConnection, Strategy, StrategyType } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import Link from "next/link"
@@ -34,14 +35,10 @@ export default function Dashboard() {
     dca: Strategy[]
     gridTrading: Strategy[]
     smaCrossover: Strategy[]
-    rsi: Strategy[]
-    macd: Strategy[]
   }>({
     dca: [],
     gridTrading: [],
-    smaCrossover: [],
-    rsi: [],
-    macd: []
+    smaCrossover: []
   })
   const [connections, setConnections] = useState<ExchangeConnection[]>([])
   const [liveBalances, setLiveBalances] = useState<any>(null)
@@ -56,9 +53,7 @@ export default function Dashboard() {
     strategy_breakdown: {
       dca: 0,
       grid_trading: 0,
-      sma_crossover: 0,
-      rsi: 0,
-      macd: 0
+      sma_crossover: 0
     }
   })
 
@@ -103,9 +98,7 @@ export default function Dashboard() {
         setAllStrategies({
           dca: [],
           gridTrading: [],
-          smaCrossover: [],
-          rsi: [],
-          macd: []
+          smaCrossover: []
         })
         setStrategies([])
         setSummary({
@@ -117,9 +110,7 @@ export default function Dashboard() {
           strategy_breakdown: {
             dca: 0,
             grid_trading: 0,
-            sma_crossover: 0,
-            rsi: 0,
-            macd: 0
+            sma_crossover: 0
           }
         })
         return
@@ -135,9 +126,7 @@ export default function Dashboard() {
       setAllStrategies({
         dca: strategiesData.dca?.strategies || [],
         gridTrading: strategiesData.gridTrading?.strategies || [],
-        smaCrossover: strategiesData.smaCrossover?.strategies || [],
-        rsi: strategiesData.rsi?.strategies || [],
-        macd: strategiesData.macd?.strategies || []
+        smaCrossover: strategiesData.smaCrossover?.strategies || []
       })
 
       // Keep DCA strategies for backward compatibility
@@ -147,9 +136,7 @@ export default function Dashboard() {
       const loadedResults = [
         strategiesData.dca,
         strategiesData.gridTrading,
-        strategiesData.smaCrossover,
-        strategiesData.rsi,
-        strategiesData.macd
+        strategiesData.smaCrossover
       ].filter(Boolean) // Remove undefined entries
 
       const combinedSummary = {
@@ -161,9 +148,7 @@ export default function Dashboard() {
         strategy_breakdown: {
           dca: strategiesData.dca?.strategies?.length || 0,
           grid_trading: strategiesData.gridTrading?.strategies?.length || 0,
-          sma_crossover: strategiesData.smaCrossover?.strategies?.length || 0,
-          rsi: strategiesData.rsi?.strategies?.length || 0,
-          macd: strategiesData.macd?.strategies?.length || 0
+          sma_crossover: strategiesData.smaCrossover?.strategies?.length || 0
         }
       }
 
@@ -301,8 +286,8 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Key Metrics Overview */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Platform Overview Section */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-200">
@@ -325,7 +310,7 @@ export default function Dashboard() {
           <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-200">
-                Exchange Connections
+                Connections
               </CardTitle>
               <div className="h-8 w-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
                 <DollarSign className="h-4 w-4 text-white" />
@@ -336,12 +321,20 @@ export default function Dashboard() {
                 {loading ? '...' : activeConnections.length}
               </div>
               <p className="text-xs text-gray-400">
-                {connections.length} total connections
+                CEX & DEX platforms
               </p>
             </CardContent>
           </Card>
 
           <DxyIndicator />
+
+          <BtcPriceIndicator />
+        </div>
+
+        {/* Market Indicators Section */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <BtcDominanceIndicator />
+          <M2Indicator />
         </div>
 
         {/* Strategy Type Breakdown */}
@@ -406,43 +399,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
-
-        {/* Quick Actions Section */}
-        <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold text-white">Quick Actions</CardTitle>
-            <CardDescription className="text-gray-300">Jump to the most important tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <Link href="/dashboard/strategies">
-              <Button className="w-full bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500/90 hover:to-pink-500/90 text-white shadow-lg justify-start">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create New Strategy
-              </Button>
-            </Link>
-
-            <Link href="/dashboard/exchanges">
-              <Button variant="outline" className="w-full border-[rgba(59,130,246,0.3)] text-blue-200 hover:bg-[rgba(59,130,246,0.2)] justify-start">
-                <Shield className="mr-2 h-4 w-4" />
-                {connections.length === 0 ? 'Connect Exchange' : 'Manage Exchanges'}
-              </Button>
-            </Link>
-
-            <Link href="/dashboard/backtesting">
-              <Button variant="outline" className="w-full border-[rgba(16,185,129,0.3)] text-emerald-200 hover:bg-[rgba(16,185,129,0.2)] justify-start">
-                <Activity className="mr-2 h-4 w-4" />
-                Run Backtest
-              </Button>
-            </Link>
-
-            <Link href="/dashboard/settings">
-              <Button variant="outline" className="w-full border-[rgba(147,51,234,0.3)] text-gray-200 hover:bg-[rgba(147,51,234,0.2)] justify-start">
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
 
         {/* Exchange Connection Prompt */}
         {!loading && connections.length === 0 && (

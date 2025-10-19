@@ -1,9 +1,10 @@
 "use client"
 
-import { Link2, TrendingUp, Shield, Zap, ArrowRight } from "lucide-react"
+import { Link2, TrendingUp, Shield, Zap, ArrowRight, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 import { ExchangeConnectionDialog } from "./exchange-connection-dialog"
 
@@ -14,17 +15,17 @@ export function ConnectExchangePrompt() {
     {
       icon: TrendingUp,
       title: "Automated Trading",
-      description: "Execute DCA strategies automatically across multiple exchanges"
+      description: "Execute DCA, Grid, and SMA strategies across CEX and DEX platforms"
     },
     {
       icon: Shield,
-      title: "Secure Connection",
-      description: "Your API keys are encrypted and never leave our secure servers"
+      title: "Secure & Non-Custodial",
+      description: "API keys encrypted on our servers, DEX via your own wallet - we never hold your funds"
     },
     {
       icon: Zap,
-      title: "Real-time Sync",
-      description: "Monitor your portfolio and execute trades in real-time"
+      title: "Real-time Execution",
+      description: "Monitor markets and execute trades instantly across all connected platforms"
     }
   ]
 
@@ -36,18 +37,17 @@ export function ConnectExchangePrompt() {
             <Link2 className="w-8 h-8 text-purple-400" />
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Connect Your Exchange
+            Connect Your Trading Platform
           </CardTitle>
           <CardDescription className="text-gray-300 mt-2">
-            Start automating your trading strategies by connecting your exchange account
+            Connect centralized exchanges or decentralized wallets to start trading
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6 pt-6">
           <Alert className="border-purple-500/30 bg-purple-500/10">
             <AlertDescription className="text-purple-200">
-              <strong>Welcome to E-Squared!</strong> Connect your exchange to enable automated DCA strategies,
-              portfolio tracking, and advanced trading features.
+              <strong>Welcome to E²!</strong> Connect CEX via API keys or DEX via wallet to enable automated strategies (DCA, Grid Trading, SMA Crossover), portfolio tracking, and real-time execution.
             </AlertDescription>
           </Alert>
 
@@ -66,18 +66,46 @@ export function ConnectExchangePrompt() {
           </div>
 
           <div className="pt-4 space-y-3">
-            <Button
-              onClick={() => setShowConnectionDialog(true)}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-              size="lg"
-            >
-              Connect Exchange
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => setShowConnectionDialog(true)}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                size="lg"
+              >
+                <Link2 className="w-4 h-4 mr-2" />
+                CEX API
+              </Button>
+
+              <Button
+                onClick={() => {/* TODO: Implement wallet connection */}}
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white"
+                size="lg"
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                DEX Wallet
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 justify-center pt-2">
+              <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
+                Binance
+              </Badge>
+              <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
+                Coinbase
+              </Badge>
+              <Badge variant="outline" className="text-xs border-cyan-400/30 text-cyan-300">
+                Uniswap
+              </Badge>
+              <Badge variant="outline" className="text-xs border-cyan-400/30 text-cyan-300">
+                PancakeSwap
+              </Badge>
+              <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-300">
+                +More
+              </Badge>
+            </div>
 
             <p className="text-xs text-gray-400 text-center">
-              We support Binance, Coinbase, Kraken, and more.
-              Your credentials are encrypted and stored securely.
+              API keys encrypted · Non-custodial wallet control · Your funds stay secure
             </p>
           </div>
 

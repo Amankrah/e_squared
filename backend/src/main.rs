@@ -22,7 +22,7 @@ use config::Config;
 use handlers::AuthService;
 use middleware::{SessionTrackingMiddleware, auth::AuthMiddleware};
 use routes::configure_routes;
-use services::{MarketDataService, DCAExecutionEngine, DxyService};
+use services::{MarketDataService, DCAExecutionEngine, DxyService, MarketIndicatorsService};
 use utils::encryption::EncryptionService;
 
 /// Initialize application services
@@ -32,6 +32,7 @@ struct AppServices {
     market_service: MarketDataService,
     execution_engine: DCAExecutionEngine,
     dxy_service: DxyService,
+    market_indicators: MarketIndicatorsService,
 }
 
 impl AppServices {
@@ -63,12 +64,16 @@ impl AppServices {
         // Initialize DXY service
         let dxy_service = DxyService::default();
 
+        // Initialize Market Indicators service
+        let market_indicators = MarketIndicatorsService::default();
+
         Ok(Self {
             database,
             auth_service,
             market_service,
             execution_engine,
             dxy_service,
+            market_indicators,
         })
     }
 
@@ -134,6 +139,7 @@ fn create_server(
         let market_service = services.market_service.clone();
         let execution_engine = services.execution_engine.clone();
         let dxy_service = services.dxy_service.clone();
+        let market_indicators = services.market_indicators.clone();
         // Legacy strategy_template_service removed
         let secret_key = secret_key.clone();
         let cors_origin = config.cors_origin.clone();
@@ -162,6 +168,7 @@ fn create_server(
             .app_data(web::Data::new(market_service.clone()))
             .app_data(web::Data::new(execution_engine.clone()))
             .app_data(web::Data::new(dxy_service.clone()))
+            .app_data(web::Data::new(market_indicators.clone()))
             // Legacy strategy_template_service removed
             .wrap(cors)
             .wrap(Logger::default())

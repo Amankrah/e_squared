@@ -1,4 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage};
+use actix_session::{Session, SessionExt};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder, QuerySelect};
 use uuid::Uuid;
@@ -18,17 +19,31 @@ use crate::services::{DCAExecutionEngine, MarketDataService};
 use crate::utils::errors::AppError;
 use crate::handlers::AuthService;
 
+/// Extract authenticated user ID from session
+fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
+    let session = req.get_session();
+
+    if let Ok(Some(user_id_str)) = session.get::<String>("user_id") {
+        if let Ok(Some(authenticated)) = session.get::<bool>("authenticated") {
+            if authenticated {
+                if let Ok(user_id) = Uuid::parse_str(&user_id_str) {
+                    return Ok(user_id);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized("Authentication required".to_string()))
+}
+
 /// Create a new DCA strategy
 pub async fn create_dca_strategy(
     db: web::Data<DatabaseConnection>,
     req: HttpRequest,
     body: web::Json<CreateDCAStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Get user ID from request extensions (set by auth middleware)
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    // Get user ID from session
+    let user_id = get_user_id_from_session(&req)?;
 
     // Validate request
     body.validate().map_err(AppError::ValidationError)?;
@@ -112,10 +127,7 @@ pub async fn get_dca_strategies(
     market_service: web::Data<MarketDataService>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Get user's strategies
     let strategies = DCAStrategyEntity::find()
@@ -250,10 +262,7 @@ pub async fn get_dca_strategy(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
@@ -348,10 +357,7 @@ pub async fn update_dca_strategy(
     path: web::Path<Uuid>,
     body: web::Json<UpdateDCAStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
@@ -431,10 +437,7 @@ pub async fn delete_dca_strategy(
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
@@ -469,10 +472,7 @@ pub async fn execute_dca_strategy(
     path: web::Path<Uuid>,
     body: web::Json<serde_json::Value>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
@@ -508,10 +508,7 @@ pub async fn get_execution_stats(
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
     // Verify authentication (user_id not used for global stats, but auth is required)
-    req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    get_user_id_from_session(&req)?;
 
     let stats = execution_engine.get_execution_stats().await;
 
@@ -523,10 +520,7 @@ pub async fn get_dca_presets(
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
     // Verify authentication
-    req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    get_user_id_from_session(&req)?;
 
     use crate::strategies::implementations::dca::presets::DCAPresets;
     use serde_json::json;
@@ -589,11 +583,8 @@ pub async fn create_dca_strategy_from_preset(
     req: HttpRequest,
     body: web::Json<CreateFromPresetRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Get user ID from request extensions
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    // Get user ID from session
+    let user_id = get_user_id_from_session(&req)?;
 
     // Validate request
     body.validate().map_err(AppError::ValidationError)?;

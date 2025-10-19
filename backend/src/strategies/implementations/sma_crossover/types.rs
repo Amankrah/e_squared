@@ -166,10 +166,10 @@ pub struct RiskSettings {
 impl Default for RiskSettings {
     fn default() -> Self {
         Self {
-            stop_loss_pct: Decimal::new(2, 2), // 2%
-            take_profit_pct: Decimal::new(4, 2), // 4%
-            max_position_pct: Decimal::new(10, 2), // 10%
-            min_signal_interval: 30, // 30 minutes
+            stop_loss_pct: Decimal::ZERO,
+            take_profit_pct: Decimal::ZERO,
+            max_position_pct: Decimal::from(100),
+            min_signal_interval: 0,
             trailing_stop: false,
             trailing_stop_pct: None,
         }
@@ -236,11 +236,11 @@ impl Default for SignalFilters {
     fn default() -> Self {
         Self {
             min_volume: None,
-            max_spread_pct: Some(Decimal::new(5, 3)), // 0.5%
-            rsi_overbought: Some(Decimal::from(70)),
-            rsi_oversold: Some(Decimal::from(30)),
+            max_spread_pct: None,
+            rsi_overbought: None,
+            rsi_oversold: None,
             macd_confirmation: false,
-            min_sma_spread_pct: Some(Decimal::new(1, 3)), // 0.1%
+            min_sma_spread_pct: None,
         }
     }
 }

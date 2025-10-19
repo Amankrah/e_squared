@@ -26,18 +26,14 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { StrategyCard } from "@/components/strategies/strategy-card"
 import { StrategyTypeSelector } from "@/components/strategies/strategy-type-selector"
 import { GridTradingConfig } from "@/components/strategies/config/grid-trading-config"
-import { RSIConfig } from "@/components/strategies/config/rsi-config"
 import { SMAConfig } from "@/components/strategies/config/sma-crossover-config"
-import { MACDConfig } from "@/components/strategies/config/macd-config"
 import { DCAConfig } from "@/components/strategies/config/dca-config"
-import { 
-  apiClient, 
-  StrategyType, 
+import {
+  apiClient,
+  StrategyType,
   Strategy,
   CreateGridTradingStrategyRequest,
-  CreateRSIStrategyRequest,
   CreateSMACrossoverStrategyRequest,
-  CreateMACDStrategyRequest,
   CreateDCAStrategyRequest,
   StrategyConfig
 } from "@/lib/api"
@@ -60,14 +56,10 @@ export default function UnifiedStrategiesPage() {
     dca: Strategy[]
     gridTrading: Strategy[]
     smaCrossover: Strategy[]
-    rsi: Strategy[]
-    macd: Strategy[]
   }>({
     dca: [],
     gridTrading: [],
-    smaCrossover: [],
-    rsi: [],
-    macd: []
+    smaCrossover: []
   })
   
   const [loading, setLoading] = useState(false)
@@ -101,9 +93,7 @@ export default function UnifiedStrategiesPage() {
         setAllStrategies({
           dca: [],
           gridTrading: [],
-          smaCrossover: [],
-          rsi: [],
-          macd: []
+          smaCrossover: []
         })
         return
       }
@@ -118,18 +108,14 @@ export default function UnifiedStrategiesPage() {
       setAllStrategies({
         dca: hasValidResults && 'dca' in results ? results.dca?.strategies || [] : [],
         gridTrading: hasValidResults && 'gridTrading' in results ? results.gridTrading?.strategies || [] : [],
-        smaCrossover: hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : [],
-        rsi: hasValidResults && 'rsi' in results ? results.rsi?.strategies || [] : [],
-        macd: hasValidResults && 'macd' in results ? results.macd?.strategies || [] : []
+        smaCrossover: hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : []
       })
 
       // Calculate summary stats from only loaded data
       const allStrategyArrays = [
         hasValidResults && 'dca' in results ? results.dca?.strategies || [] : [],
         hasValidResults && 'gridTrading' in results ? results.gridTrading?.strategies || [] : [],
-        hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : [],
-        hasValidResults && 'rsi' in results ? results.rsi?.strategies || [] : [],
-        hasValidResults && 'macd' in results ? results.macd?.strategies || [] : []
+        hasValidResults && 'smaCrossover' in results ? results.smaCrossover?.strategies || [] : []
       ]
       
       const totalStrategies = allStrategyArrays.reduce((sum, arr) => sum + arr.length, 0)
@@ -182,18 +168,6 @@ export default function UnifiedStrategiesPage() {
     }
   }, [loadAllStrategies])
 
-  const handleCreateRSIStrategy = useCallback(async (data: CreateRSIStrategyRequest) => {
-    try {
-      await apiClient.createRSIStrategy(data)
-      await loadAllStrategies()
-      setViewMode('overview')
-      setSelectedStrategyType(undefined)
-    } catch (error) {
-      console.error('Failed to create RSI strategy:', error)
-      throw error
-    }
-  }, [loadAllStrategies])
-
   const handleCreateSMACrossoverStrategy = useCallback(async (data: CreateSMACrossoverStrategyRequest) => {
     try {
       await apiClient.createSMACrossoverStrategy(data)
@@ -202,18 +176,6 @@ export default function UnifiedStrategiesPage() {
       setSelectedStrategyType(undefined)
     } catch (error) {
       console.error('Failed to create SMA crossover strategy:', error)
-      throw error
-    }
-  }, [loadAllStrategies])
-
-  const handleCreateMACDStrategy = useCallback(async (data: CreateMACDStrategyRequest) => {
-    try {
-      await apiClient.createMACDStrategy(data)
-      await loadAllStrategies()
-      setViewMode('overview')
-      setSelectedStrategyType(undefined)
-    } catch (error) {
-      console.error('Failed to create MACD strategy:', error)
       throw error
     }
   }, [loadAllStrategies])
@@ -244,14 +206,8 @@ export default function UnifiedStrategiesPage() {
   const gridTradingBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
     handleBacktestStrategy('grid_trading', config, name, assetSymbol), [handleBacktestStrategy])
 
-  const rsiBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
-    handleBacktestStrategy('rsi', config, name, assetSymbol), [handleBacktestStrategy])
-
   const smaBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
     handleBacktestStrategy('sma_crossover', config, name, assetSymbol), [handleBacktestStrategy])
-
-  const macdBacktestHandler = useCallback((config: StrategyConfig, name: string, assetSymbol: string) =>
-    handleBacktestStrategy('macd', config, name, assetSymbol), [handleBacktestStrategy])
 
   // Memoize cancel handlers to prevent re-renders
   const handleCancelStrategy = useCallback(() => {
@@ -271,17 +227,8 @@ export default function UnifiedStrategiesPage() {
         case 'grid_trading':
           await apiClient.deleteGridTradingStrategy(strategy.id)
           break
-        case 'rsi':
-          await apiClient.deleteRSIStrategy(strategy.id)
-          break
         case 'sma_crossover':
           await apiClient.deleteSMACrossoverStrategy(strategy.id)
-          break
-        case 'macd':
-          await apiClient.deleteMACDStrategy(strategy.id)
-          break
-        case 'dca':
-          await apiClient.deleteDCAStrategy(strategy.id)
           break
       }
       await loadAllStrategies()
@@ -295,9 +242,7 @@ export default function UnifiedStrategiesPage() {
     return [
       ...allStrategies.dca.map(s => ({ strategy: s, type: 'dca' as StrategyType })),
       ...allStrategies.gridTrading.map(s => ({ strategy: s, type: 'grid_trading' as StrategyType })),
-      ...allStrategies.smaCrossover.map(s => ({ strategy: s, type: 'sma_crossover' as StrategyType })),
-      ...allStrategies.rsi.map(s => ({ strategy: s, type: 'rsi' as StrategyType })),
-      ...allStrategies.macd.map(s => ({ strategy: s, type: 'macd' as StrategyType }))
+      ...allStrategies.smaCrossover.map(s => ({ strategy: s, type: 'sma_crossover' as StrategyType }))
     ]
   }
 
@@ -470,8 +415,6 @@ export default function UnifiedStrategiesPage() {
                       <SelectItem value="dca">DCA</SelectItem>
                       <SelectItem value="grid_trading">Grid Trading</SelectItem>
                       <SelectItem value="sma_crossover">SMA Crossover</SelectItem>
-                      <SelectItem value="rsi">RSI</SelectItem>
-                      <SelectItem value="macd">MACD</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -550,14 +493,6 @@ export default function UnifiedStrategiesPage() {
                 onBacktest={gridTradingBacktestHandler}
               />
             )}
-            
-            {selectedStrategyType === 'rsi' && (
-              <RSIConfig
-                onSubmit={handleCreateRSIStrategy}
-                onCancel={handleCancelStrategy}
-                onBacktest={rsiBacktestHandler}
-              />
-            )}
 
             {selectedStrategyType === 'sma_crossover' && (
               <SMAConfig
@@ -567,16 +502,8 @@ export default function UnifiedStrategiesPage() {
               />
             )}
 
-            {selectedStrategyType === 'macd' && (
-              <MACDConfig
-                onSubmit={handleCreateMACDStrategy}
-                onCancel={handleCancelStrategy}
-                onBacktest={macdBacktestHandler}
-              />
-            )}
-            
             {/* Fallback for strategies without config components */}
-            {!['dca', 'grid_trading', 'rsi', 'sma_crossover', 'macd'].includes(selectedStrategyType) && (
+            {!['dca', 'grid_trading', 'sma_crossover'].includes(selectedStrategyType) && (
               <Card className="bg-white/5 backdrop-blur-xl border border-white/10">
                 <CardContent className="p-12 text-center">
                   <div className="text-4xl mb-4">🚧</div>

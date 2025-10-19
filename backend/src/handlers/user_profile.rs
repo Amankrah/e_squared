@@ -1,4 +1,5 @@
-use actix_web::{web, HttpResponse, Result};
+use actix_web::{web, HttpResponse, Result, HttpRequest};
+use actix_session::{Session, SessionExt};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
@@ -12,14 +13,31 @@ use crate::models::{
 };
 use crate::utils::errors::AppError;
 
+/// Extract authenticated user ID from session
+fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
+    let session = req.get_session();
+
+    if let Ok(Some(user_id_str)) = session.get::<String>("user_id") {
+        if let Ok(Some(authenticated)) = session.get::<bool>("authenticated") {
+            if authenticated {
+                if let Ok(user_id) = Uuid::parse_str(&user_id_str) {
+                    return Ok(user_id);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized("Authentication required".to_string()))
+}
+
 pub async fn create_profile(
     db: web::Data<DatabaseConnection>,
-    user_id: web::ReqData<Uuid>,
+    http_req: HttpRequest,
     req: web::Json<CreateUserProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
     req.validate().map_err(AppError::ValidationError)?;
 
-    let user_id = user_id.into_inner();
+    let user_id = get_user_id_from_session(&http_req)?;
 
     let existing_profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
@@ -65,9 +83,9 @@ pub async fn create_profile(
 
 pub async fn get_profile(
     db: web::Data<DatabaseConnection>,
-    user_id: web::ReqData<Uuid>,
+    http_req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = user_id.into_inner();
+    let user_id = get_user_id_from_session(&http_req)?;
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
@@ -100,12 +118,12 @@ pub async fn get_profile_by_id(
 
 pub async fn update_profile(
     db: web::Data<DatabaseConnection>,
-    user_id: web::ReqData<Uuid>,
+    http_req: HttpRequest,
     req: web::Json<UpdateUserProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
     req.validate().map_err(AppError::ValidationError)?;
 
-    let user_id = user_id.into_inner();
+    let user_id = get_user_id_from_session(&http_req)?;
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
@@ -148,9 +166,9 @@ pub async fn update_profile(
 
 pub async fn delete_profile(
     db: web::Data<DatabaseConnection>,
-    user_id: web::ReqData<Uuid>,
+    http_req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = user_id.into_inner();
+    let user_id = get_user_id_from_session(&http_req)?;
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))

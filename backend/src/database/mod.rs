@@ -39,6 +39,10 @@ async fn create_tables(db: &DatabaseConnection) -> Result<()> {
         ("wallet_balances", include_str!("sql/create_wallet_balances_table.sql")),
         ("dca_strategies", include_str!("sql/create_dca_strategies_table.sql")),
         ("dca_executions", include_str!("sql/create_dca_executions_table.sql")),
+        ("grid_trading_strategies", include_str!("sql/create_grid_trading_strategies_table.sql")),
+        ("grid_trading_executions", include_str!("sql/create_grid_trading_executions_table.sql")),
+        ("sma_crossover_strategies", include_str!("sql/create_sma_crossover_strategies_table.sql")),
+        ("sma_crossover_executions", include_str!("sql/create_sma_crossover_executions_table.sql")),
         ("market_data", include_str!("sql/create_market_data_table.sql")),
         ("backtest_results", include_str!("sql/create_backtest_results_table.sql")),
     ];
@@ -83,6 +87,8 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
     migrate_strategy_type_column(db).await?;
     // Migration for total_invested column
     migrate_total_invested_column(db).await?;
+    // Migration for DCA strategies table schema
+    migrate_dca_strategies_schema(db).await?;
 
     info!("✓ Database migrations completed");
     Ok(())
@@ -322,4 +328,59 @@ async fn migrate_total_invested_column(db: &DatabaseConnection) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn migrate_dca_strategies_schema(db: &DatabaseConnection) -> Result<()> {
+    // Check if config_json column exists in dca_strategies (new schema)
+    let test_query = "SELECT config_json FROM dca_strategies LIMIT 1";
+
+    match db.execute_unprepared(test_query).await {
+        Ok(_) => {
+            info!("DCA strategies table already has new schema");
+            Ok(())
+        },
+        Err(_) => {
+            info!("Migrating DCA strategies table to new schema...");
+
+            // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+            let migration_sql = r#"
+            BEGIN TRANSACTION;
+
+            -- Create new table with correct schema
+            CREATE TABLE IF NOT EXISTS dca_strategies_new (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                asset_symbol TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                config_json TEXT NOT NULL,
+                total_invested REAL NOT NULL DEFAULT 0.0,
+                total_purchased REAL NOT NULL DEFAULT 0.0,
+                average_buy_price REAL,
+                last_execution_at TEXT,
+                next_execution_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            );
+
+            -- Drop old table and rename new one
+            DROP TABLE IF EXISTS dca_strategies;
+            ALTER TABLE dca_strategies_new RENAME TO dca_strategies;
+
+            COMMIT;
+            "#;
+
+            match db.execute_unprepared(migration_sql).await {
+                Ok(_) => {
+                    info!("✓ Successfully migrated DCA strategies table schema");
+                    Ok(())
+                },
+                Err(e) => {
+                    error!("Failed to migrate DCA strategies table: {}", e);
+                    Err(e.into())
+                }
+            }
+        }
+    }
 }

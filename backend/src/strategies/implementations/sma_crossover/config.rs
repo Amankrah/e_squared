@@ -61,7 +61,7 @@ impl Default for ConfirmationSettings {
             macd_signal: 9,
             use_volume: false,
             volume_period: 20,
-            min_volume_multiplier: Decimal::new(15, 1), // 1.5
+            min_volume_multiplier: Decimal::ONE,
         }
     }
 }
@@ -69,14 +69,14 @@ impl Default for ConfirmationSettings {
 impl Default for SMACrossoverConfig {
     fn default() -> Self {
         Self {
-            fast_period: 10,
-            slow_period: 30,
-            position_size_pct: Decimal::new(10, 2), // 10%
+            fast_period: 7,
+            slow_period: 14,
+            position_size_pct: Decimal::from(100),
             risk_settings: RiskSettings::default(),
             filters: SignalFilters::default(),
             enable_long: true,
-            enable_short: true,
-            use_market_orders: false,
+            enable_short: false,
+            use_market_orders: true,
             confirmation_indicators: ConfirmationSettings::default(),
         }
     }

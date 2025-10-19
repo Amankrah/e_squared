@@ -14,14 +14,12 @@ interface StrategyTypeStatsProps {
     dca: Strategy[]
     gridTrading: Strategy[]
     smaCrossover: Strategy[]
-    rsi: Strategy[]
-    macd: Strategy[]
   }
   className?: string
 }
 
 export function StrategyTypeStats({ strategies, className }: StrategyTypeStatsProps) {
-  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover', 'rsi', 'macd']
+  const strategyTypes: StrategyType[] = ['dca', 'grid_trading', 'sma_crossover']
 
   const getTypeStats = (type: StrategyType) => {
     const key = type === 'grid_trading' ? 'gridTrading' : 
@@ -54,7 +52,7 @@ export function StrategyTypeStats({ strategies, className }: StrategyTypeStatsPr
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {strategyTypes.map((type) => {
           const info = getStrategyInfo(type)
           const stats = getTypeStats(type)

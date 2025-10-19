@@ -19,8 +19,6 @@ import { BacktestResults } from "@/components/backtesting/backtest-results"
 import { DCAConfig } from "@/components/strategies/config/dca-config"
 import { GridTradingConfig } from "@/components/strategies/config/grid-trading-config"
 import { SMAConfig } from "@/components/strategies/config/sma-crossover-config"
-import { RSIConfig } from "@/components/strategies/config/rsi-config"
-import { MACDConfig } from "@/components/strategies/config/macd-config"
 import {
   apiClient,
   StrategyType,
@@ -29,9 +27,7 @@ import {
   BacktestRequest,
   type DCAConfig as DCAConfigType,
   type GridTradingConfig as GridConfigType,
-  type SMACrossoverConfig as SMAConfigType,
-  type RSIConfig as RSIConfigType,
-  type MACDConfig as MACDConfigType
+  type SMACrossoverConfig as SMAConfigType
 } from "@/lib/api"
 import { 
   getStrategyInfo, 
@@ -53,9 +49,7 @@ export default function BacktestingPage() {
     const nameToTypeMap: Record<string, StrategyType> = {
       'dca_v2': 'dca',
       'grid_trading_v2': 'grid_trading',
-      'sma_crossover_v2': 'sma_crossover',
-      'rsi_v1': 'rsi',
-      'macd_v1': 'macd'
+      'sma_crossover_v2': 'sma_crossover'
     }
     return nameToTypeMap[strategyName] || 'dca' // fallback to dca if not found
   }
@@ -117,8 +111,6 @@ export default function BacktestingPage() {
   const [customDCAConfig, setCustomDCAConfig] = useState<DCAConfigType | null>(null)
   const [customGridConfig, setCustomGridConfig] = useState<GridConfigType | null>(null)
   const [customSMAConfig, setCustomSMAConfig] = useState<SMAConfigType | null>(null)
-  const [customRSIConfig, setCustomRSIConfig] = useState<RSIConfigType | null>(null)
-  const [customMACDConfig, setCustomMACDConfig] = useState<MACDConfigType | null>(null)
   const [backtestHistory, setBacktestHistory] = useState<BacktestResult[]>([])
   const [currentBacktest, setCurrentBacktest] = useState<BacktestResult | BacktestEngineResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -141,18 +133,6 @@ export default function BacktestingPage() {
     asset_symbol: 'BTC',
     config: customSMAConfig || (selectedStrategyType === 'sma_crossover' ? DEFAULT_CONFIGS[selectedStrategyType] as SMAConfigType : {} as SMAConfigType)
   }), [selectedStrategyType, customSMAConfig])
-
-  const rsiInitialData = useMemo(() => ({
-    name: selectedStrategyType === 'rsi' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
-    asset_symbol: 'BTC',
-    config: customRSIConfig || (selectedStrategyType === 'rsi' ? DEFAULT_CONFIGS[selectedStrategyType] as RSIConfigType : {} as RSIConfigType)
-  }), [selectedStrategyType, customRSIConfig])
-
-  const macdInitialData = useMemo(() => ({
-    name: selectedStrategyType === 'macd' ? `${getStrategyInfo(selectedStrategyType).name} Backtest` : '',
-    asset_symbol: 'BTC',
-    config: customMACDConfig || (selectedStrategyType === 'macd' ? DEFAULT_CONFIGS[selectedStrategyType] as MACDConfigType : {} as MACDConfigType)
-  }), [selectedStrategyType, customMACDConfig])
 
   const handleConfigSubmit = useCallback(async () => {
     // This is for strategy creation, not backtesting
@@ -202,12 +182,6 @@ export default function BacktestingPage() {
             case 'sma_crossover':
               setCustomSMAConfig(strategyData.config)
               break
-            case 'rsi':
-              setCustomRSIConfig(strategyData.config)
-              break
-            case 'macd':
-              setCustomMACDConfig(strategyData.config)
-              break
           }
 
           setViewMode('configure')
@@ -231,8 +205,6 @@ export default function BacktestingPage() {
     setCustomDCAConfig(null)
     setCustomGridConfig(null)
     setCustomSMAConfig(null)
-    setCustomRSIConfig(null)
-    setCustomMACDConfig(null)
     setViewMode('configure')
   }
 
@@ -298,7 +270,17 @@ export default function BacktestingPage() {
     }
   }
 
-  const handleSMABacktest = async (config: SMAConfigType, name: string, assetSymbol: string) => {
+  const handleSMABacktest = async (
+    config: SMAConfigType,
+    name: string,
+    assetSymbol: string,
+    backtestParams: {
+      start_date: string
+      end_date: string
+      interval: string
+      initial_capital: number
+    }
+  ) => {
     setCustomSMAConfig(config)
     setViewMode('running')
 
@@ -306,11 +288,11 @@ export default function BacktestingPage() {
       const request: BacktestRequest = {
         strategy_type: 'sma_crossover',
         asset_symbol: assetSymbol || 'BTC',
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        initial_capital: 10000,
+        start_date: backtestParams.start_date,
+        end_date: backtestParams.end_date,
+        initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: '1d'
+        interval: backtestParams.interval
       }
       await handleRunBacktest(request)
     } catch (error) {
@@ -319,47 +301,6 @@ export default function BacktestingPage() {
     }
   }
 
-  const handleRSIBacktest = async (config: RSIConfigType, name: string, assetSymbol: string) => {
-    setCustomRSIConfig(config)
-    setViewMode('running')
-
-    try {
-      const request: BacktestRequest = {
-        strategy_type: 'rsi',
-        asset_symbol: assetSymbol || 'BTC',
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        initial_capital: 10000,
-        config: config,
-        interval: '1d'
-      }
-      await handleRunBacktest(request)
-    } catch (error) {
-      console.error('RSI backtest failed:', error)
-      setViewMode('configure')
-    }
-  }
-
-  const handleMACDBacktest = async (config: MACDConfigType, name: string, assetSymbol: string) => {
-    setCustomMACDConfig(config)
-    setViewMode('running')
-
-    try {
-      const request: BacktestRequest = {
-        strategy_type: 'macd',
-        asset_symbol: assetSymbol || 'BTC',
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
-        initial_capital: 10000,
-        config: config,
-        interval: '1d'
-      }
-      await handleRunBacktest(request)
-    } catch (error) {
-      console.error('MACD backtest failed:', error)
-      setViewMode('configure')
-    }
-  }
 
   const handleRunBacktest = async (request: BacktestRequest) => {
     setViewMode('running')
@@ -692,26 +633,6 @@ export default function BacktestingPage() {
                   onSubmit={handleConfigSubmit}
                   onCancel={handleConfigCancel}
                   onBacktest={handleSMABacktest}
-                  className="w-full"
-                />
-              )}
-
-              {selectedStrategyType === 'rsi' && (
-                <RSIConfig
-                  initialData={rsiInitialData}
-                  onSubmit={handleConfigSubmit}
-                  onCancel={handleConfigCancel}
-                  onBacktest={handleRSIBacktest}
-                  className="w-full"
-                />
-              )}
-
-              {selectedStrategyType === 'macd' && (
-                <MACDConfig
-                  initialData={macdInitialData}
-                  onSubmit={handleConfigSubmit}
-                  onCancel={handleConfigCancel}
-                  onBacktest={handleMACDBacktest}
                   className="w-full"
                 />
               )}

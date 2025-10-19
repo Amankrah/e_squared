@@ -422,7 +422,7 @@ export interface BaseExecution {
   error_message?: string
 }
 
-export type StrategyType = 'dca' | 'grid_trading' | 'sma_crossover' | 'rsi' | 'macd'
+export type StrategyType = 'dca' | 'grid_trading' | 'sma_crossover'
 
 // Grid Trading Strategy Types
 export interface GridTradingConfig {
@@ -459,14 +459,41 @@ export interface GridTradingStrategiesResponse {
   active_strategies: number
 }
 
-// SMA Crossover Strategy Types
+// SMA Crossover Strategy Types - Backend aligned
 export interface SMACrossoverConfig {
-  short_period: number
-  long_period: number
-  investment_amount: string
-  stop_loss_percentage?: string
-  take_profit_percentage?: string
-  confirmation_period?: number
+  fast_period: number
+  slow_period: number
+  position_size_pct: number
+  enable_long: boolean
+  enable_short: boolean
+  use_market_orders: boolean
+  risk_settings: {
+    stop_loss_pct: number
+    take_profit_pct: number
+    max_position_pct: number
+    min_signal_interval: number
+    trailing_stop: boolean
+    trailing_stop_pct?: number
+  }
+  filters: {
+    min_volume?: number
+    max_spread_pct?: number
+    rsi_overbought?: number
+    rsi_oversold?: number
+    macd_confirmation: boolean
+    min_sma_spread_pct?: number
+  }
+  confirmation_indicators: {
+    use_rsi: boolean
+    rsi_period: number
+    use_macd: boolean
+    macd_fast: number
+    macd_slow: number
+    macd_signal: number
+    use_volume: boolean
+    volume_period: number
+    min_volume_multiplier: number
+  }
 }
 
 export interface SMACrossoverStrategy extends BaseStrategy {
@@ -601,7 +628,7 @@ export interface BackendBacktestRequest {
   end_date: string
   initial_balance: number
   strategy_name: string
-  strategy_parameters?: any
+  strategy_parameters?: Record<string, any>
   stop_loss_percentage?: number
   take_profit_percentage?: number
 }
@@ -651,7 +678,7 @@ export interface OpenPosition {
 // Backtest engine result (from run backtest endpoint)
 export interface BacktestEngineResult {
   backtest_id: string
-  config: any
+  config: Record<string, any>
   trades: BacktestTrade[]
   metrics: BacktestEngineMetrics
   performance_chart: PerformancePoint[]
@@ -688,10 +715,10 @@ export interface PerformancePoint {
 }
 
 export interface BacktestResultDetail extends BacktestResult {
-  strategy_parameters: any
-  trades_data: any
-  equity_curve: any
-  drawdown_curve: any
+  strategy_parameters: Record<string, any>
+  trades_data: Record<string, any>
+  equity_curve: Record<string, any>
+  drawdown_curve: Record<string, any>
 }
 
 export interface BacktestListResponse {
@@ -829,8 +856,8 @@ export interface UserProfile {
 
 
 export interface BacktestResults {
-  config: any
-  executions: any[]
+  config: Record<string, any>
+  executions: Record<string, any>[]
   performance_metrics: {
     total_return: string
     total_return_percentage: string
@@ -853,7 +880,7 @@ export interface BacktestResults {
 }
 
 export interface TemplateComparison {
-  request: any
+  request: Record<string, any>
   results: {
     template_id: string
     template_name: string
@@ -1158,7 +1185,7 @@ class ApiClient {
   // Helper method to get connections with live balances
   async getConnectionsWithLiveBalances(password: string): Promise<{
     connections: ExchangeConnection[];
-    live_balances: Record<string, any>;
+    live_balances: Record<string, LiveBalancesResponse['balances'][0]>;
   }> {
     const [connectionsResponse, liveBalancesResponse] = await Promise.all([
       this.getExchangeConnections(),
@@ -1166,7 +1193,7 @@ class ApiClient {
     ]);
 
     // Create a map of connection_id to live balance data
-    const liveBalancesMap: Record<string, any> = {};
+    const liveBalancesMap: Record<string, LiveBalancesResponse['balances'][0]> = {};
     if (liveBalancesResponse.balances) {
       for (const balance of liveBalancesResponse.balances) {
         liveBalancesMap[balance.exchange_connection_id] = balance;
@@ -1259,16 +1286,10 @@ class ApiClient {
   }
 
   async createSMACrossoverStrategy(data: CreateSMACrossoverStrategyRequest): Promise<SMACrossoverStrategy> {
-    // Transform frontend config to backend config
-    const transformedData = {
-      name: data.name,
-      asset_symbol: data.asset_symbol,
-      config: this.transformSMACrossoverConfig(data.config)
-    }
-
+    // Direct submission since frontend structure matches backend exactly
     return this.request<SMACrossoverStrategy>('/sma-crossover/strategies', {
       method: 'POST',
-      body: JSON.stringify(transformedData),
+      body: JSON.stringify(data),
     })
   }
 
@@ -1289,77 +1310,6 @@ class ApiClient {
     })
   }
 
-  // RSI Strategy endpoints
-  async getRSIStrategies(): Promise<RSIStrategiesResponse> {
-    return this.request<RSIStrategiesResponse>('/rsi/strategies')
-  }
-
-  async createRSIStrategy(data: CreateRSIStrategyRequest): Promise<RSIStrategy> {
-    // Transform frontend config to backend config
-    const transformedData = {
-      name: data.name,
-      asset_symbol: data.asset_symbol,
-      config: this.transformRSIConfig(data.config)
-    }
-
-    return this.request<RSIStrategy>('/rsi/strategies', {
-      method: 'POST',
-      body: JSON.stringify(transformedData),
-    })
-  }
-
-  async getRSIStrategy(strategyId: string): Promise<RSIStrategy> {
-    return this.request<RSIStrategy>(`/rsi/strategies/${strategyId}`)
-  }
-
-  async updateRSIStrategy(strategyId: string, data: Partial<CreateRSIStrategyRequest>): Promise<RSIStrategy> {
-    return this.request<RSIStrategy>(`/rsi/strategies/${strategyId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteRSIStrategy(strategyId: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/rsi/strategies/${strategyId}`, {
-      method: 'DELETE',
-    })
-  }
-
-  // MACD Strategy endpoints
-  async getMACDStrategies(): Promise<MACDStrategiesResponse> {
-    return this.request<MACDStrategiesResponse>('/macd/strategies')
-  }
-
-  async createMACDStrategy(data: CreateMACDStrategyRequest): Promise<MACDStrategy> {
-    // Transform frontend config to backend config
-    const transformedData = {
-      name: data.name,
-      asset_symbol: data.asset_symbol,
-      config: this.transformMACDConfig(data.config)
-    }
-
-    return this.request<MACDStrategy>('/macd/strategies', {
-      method: 'POST',
-      body: JSON.stringify(transformedData),
-    })
-  }
-
-  async getMACDStrategy(strategyId: string): Promise<MACDStrategy> {
-    return this.request<MACDStrategy>(`/macd/strategies/${strategyId}`)
-  }
-
-  async updateMACDStrategy(strategyId: string, data: Partial<CreateMACDStrategyRequest>): Promise<MACDStrategy> {
-    return this.request<MACDStrategy>(`/macd/strategies/${strategyId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteMACDStrategy(strategyId: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/macd/strategies/${strategyId}`, {
-      method: 'DELETE',
-    })
-  }
 
   // Strategy Summary (lightweight endpoint)
   async getUserStrategySummary(): Promise<{
@@ -1380,11 +1330,15 @@ class ApiClient {
     dca?: DCAStrategiesResponse
     gridTrading?: GridTradingStrategiesResponse
     smaCrossover?: SMACrossoverStrategiesResponse
-    rsi?: RSIStrategiesResponse
-    macd?: MACDStrategiesResponse
   }> {
-    const promises: Promise<any>[] = []
-    const results: any = {}
+    type Results = {
+      dca?: DCAStrategiesResponse
+      gridTrading?: GridTradingStrategiesResponse
+      smaCrossover?: SMACrossoverStrategiesResponse
+    }
+    
+    const promises: Promise<void>[] = []
+    const results: Results = {}
 
     if (types.includes('dca')) {
       promises.push(
@@ -1410,22 +1364,6 @@ class ApiClient {
       )
     }
 
-    if (types.includes('rsi')) {
-      promises.push(
-        this.getRSIStrategies()
-          .then(data => { results.rsi = data })
-          .catch(() => { results.rsi = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
-      )
-    }
-
-    if (types.includes('macd')) {
-      promises.push(
-        this.getMACDStrategies()
-          .then(data => { results.macd = data })
-          .catch(() => { results.macd = { strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 } })
-      )
-    }
-
     await Promise.all(promises)
     return results
   }
@@ -1435,22 +1373,18 @@ class ApiClient {
     dca: DCAStrategiesResponse
     gridTrading: GridTradingStrategiesResponse
     smaCrossover: SMACrossoverStrategiesResponse
-    rsi: RSIStrategiesResponse
-    macd: MACDStrategiesResponse
   }> {
-    const [dca, gridTrading, smaCrossover, rsi, macd] = await Promise.all([
+    const [dca, gridTrading, smaCrossover] = await Promise.all([
       this.getDCAStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
       this.getGridTradingStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
-      this.getSMACrossoverStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
-      this.getRSIStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 })),
-      this.getMACDStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 }))
+      this.getSMACrossoverStrategies().catch(() => ({ strategies: [], total_allocation: '0', total_invested: '0', total_profit_loss: '0', active_strategies: 0 }))
     ])
 
-    return { dca, gridTrading, smaCrossover, rsi, macd }
+    return { dca, gridTrading, smaCrossover }
   }
 
   // Configuration transformation helpers
-  private transformDCAConfig(config: any): DCAConfig {
+  private transformDCAConfig(config: Record<string, any>): DCAConfig {
     // Handle different frequency formats
     let frequency: DCAFrequency
     if (config.frequency) {
@@ -1600,7 +1534,7 @@ class ApiClient {
     return dcaConfig
   }
 
-  private transformGridTradingConfig(config: any): any {
+  private transformGridTradingConfig(config: Record<string, any>): Record<string, any> {
     const rangePercentage = parseFloat(config.range_percentage || '10')
     const gridLevels = config.grid_count || 10
 
@@ -1653,197 +1587,9 @@ class ApiClient {
     }
   }
 
-  private transformRSIConfig(config: any): any {
-    return {
-      rsi_period: config.rsi_period || 14,
-      overbought_level: config.overbought_threshold || 70,
-      oversold_level: config.oversold_threshold || 30,
-      enable_long: true,
-      enable_short: false,
-      position_sizing: {
-        sizing_method: 'PortfolioPercentage',
-        fixed_size: null,
-        portfolio_percentage: 5.0,
-        risk_per_trade: 2.0,
-        max_position_size: parseFloat(config.investment_amount || '300'),
-        min_position_size: 10.0
-      },
-      risk_management: {
-        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 5.0,
-        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 10.0,
-        max_drawdown_pct: 15.0,
-        max_consecutive_losses: 3,
-        cooldown_period: 30,
-        rsi_stop_loss: 10.0,
-        trailing_stop: {
-          enabled: true,
-          activation_threshold: 3.0,
-          trailing_distance: 2.0,
-          rsi_based_trailing: false,
-          rsi_trailing_buffer: 5.0
-        }
-      },
-      signal_filters: {
-        min_volume: null,
-        max_spread_pct: 0.5,
-        sma_trend_confirmation: false,
-        sma_trend_period: 50,
-        min_rsi_change: 5.0,
-        price_action_confirmation: false
-      },
-      divergence_config: {
-        enabled: false,
-        lookback_periods: 50,
-        min_strength: 0.6,
-        enable_regular_divergence: true,
-        enable_hidden_divergence: false,
-        swing_sensitivity: 1.5,
-        min_swing_size: 2.0
-      },
-      exit_strategy: {
-        strategy_type: 'RSIReversal',
-        rsi_exit_levels: {
-          long_exit_level: 70.0,
-          short_exit_level: 30.0,
-          centerline_exit: true
-        },
-        time_based_exit: null,
-        profit_target_multiplier: 2.0,
-        partial_exits: null
-      },
-      performance_config: {
-        detailed_tracking: true,
-        calculate_sharpe: true,
-        risk_free_rate: 2.0,
-        reporting_interval: 24,
-        max_trade_history: 1000
-      }
-    }
-  }
-
-  private transformSMACrossoverConfig(config: any): any {
-    return {
-      fast_period: config.short_period || 20,
-      slow_period: config.long_period || 50,
-      position_size_pct: 5.0, // 5% of portfolio per trade
-      risk_settings: {
-        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 2.0,
-        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 4.0,
-        max_position_pct: 10.0,
-        min_signal_interval: 30,
-        trailing_stop: false,
-        trailing_stop_pct: null
-      },
-      filters: {
-        min_volume: null,
-        max_spread_pct: 0.5,
-        rsi_overbought: 70.0,
-        rsi_oversold: 30.0,
-        macd_confirmation: false,
-        min_sma_spread_pct: 0.1
-      },
-      enable_long: true,
-      enable_short: false,
-      use_market_orders: false,
-      confirmation_indicators: {
-        use_rsi: false,
-        rsi_period: 14,
-        use_macd: false,
-        macd_fast: 12,
-        macd_slow: 26,
-        macd_signal: 9,
-        use_volume: false,
-        volume_period: 20,
-        min_volume_multiplier: 1.5
-      }
-    }
-  }
-
-  private transformMACDConfig(config: any): any {
-    return {
-      fast_period: config.fast_period || 12,
-      slow_period: config.slow_period || 26,
-      signal_period: config.signal_period || 9,
-      enable_long: true,
-      enable_short: false,
-      position_sizing: {
-        sizing_method: 'PortfolioPercentage',
-        fixed_size: null,
-        portfolio_percentage: 5.0,
-        risk_per_trade: 2.0,
-        max_position_size: parseFloat(config.investment_amount || '400'),
-        min_position_size: 10.0,
-        scale_by_macd_strength: true
-      },
-      risk_management: {
-        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 4.0,
-        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : 12.0,
-        max_drawdown_pct: 15.0,
-        max_consecutive_losses: 3,
-        cooldown_period: 30,
-        macd_reversal_stop: true,
-        histogram_stop_threshold: 0.0005,
-        trailing_stop: {
-          enabled: true,
-          activation_threshold: 2.5,
-          trailing_distance: 1.5,
-          macd_based_trailing: true,
-          macd_trailing_buffer: 0.0001
-        }
-      },
-      signal_filters: {
-        min_volume: null,
-        max_spread_pct: 0.5,
-        min_histogram_change: 0.0001,
-        min_crossover_distance: 0.00001,
-        sma_trend_confirmation: false,
-        sma_trend_period: 50,
-        price_action_confirmation: false,
-        filter_consolidation: false
-      },
-      signal_config: {
-        enable_signal_crossover: true,
-        enable_zero_crossover: true,
-        enable_divergence: false,
-        enable_histogram: true,
-        signal_strength: {
-          min_strong_histogram: 0.0001,
-          min_crossover_distance: 0.00005,
-          min_momentum_change: 0.00001,
-          require_histogram_acceleration: true
-        },
-        confirmation: {
-          price_confirmation: true,
-          price_confirmation_bars: 2,
-          volume_confirmation: false,
-          volume_increase_threshold: 1.2,
-          trend_alignment: true,
-          trend_sma_period: 50
-        }
-      },
-      exit_strategy: {
-        strategy_type: 'MACDReversal',
-        macd_exit_conditions: {
-          opposite_crossover: true,
-          zero_line_exit: false,
-          histogram_reversal: true,
-          histogram_reversal_threshold: 0.0003,
-          momentum_weakening: true,
-          momentum_periods: 3
-        },
-        partial_exits: null,
-        time_based_exit: null,
-        profit_target_multiplier: 2.0
-      },
-      performance_config: {
-        detailed_tracking: true,
-        calculate_sharpe: true,
-        risk_free_rate: 2.0,
-        reporting_interval: 24,
-        max_trade_history: 1000,
-        track_macd_metrics: true
-      }
-    }
+  private transformSMACrossoverConfig(config: SMACrossoverConfig): SMACrossoverConfig {
+    // Direct pass-through since frontend now matches backend structure exactly
+    return config
   }
 
   // Backtesting endpoints
@@ -1867,14 +1613,8 @@ class ApiClient {
       case 'grid_trading':
         transformedConfig = this.transformGridTradingConfig(data.config)
         break
-      case 'rsi':
-        transformedConfig = this.transformRSIConfig(data.config)
-        break
       case 'sma_crossover':
         transformedConfig = this.transformSMACrossoverConfig(data.config)
-        break
-      case 'macd':
-        transformedConfig = this.transformMACDConfig(data.config)
         break
     }
 
@@ -1882,9 +1622,7 @@ class ApiClient {
     const strategyNameMap: Record<StrategyType, string> = {
       'dca': 'dca_v2',
       'grid_trading': 'grid_trading_v2',
-      'sma_crossover': 'sma_crossover_v2',
-      'rsi': 'rsi_v1',
-      'macd': 'macd_v1'
+      'sma_crossover': 'sma_crossover_v2'
     }
 
     // Convert frontend format to backend format
@@ -1967,7 +1705,7 @@ class ApiClient {
     })
   }
 
-  async validateStrategyParameters(templateId: string, parameters: any): Promise<{ valid: boolean; issues: string[] }> {
+  async validateStrategyParameters(templateId: string, parameters: Record<string, any>): Promise<{ valid: boolean; issues: string[] }> {
     return this.request<{ valid: boolean; issues: string[] }>(`/strategy-templates/${templateId}/validate`, {
       method: 'POST',
       body: JSON.stringify(parameters),
