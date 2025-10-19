@@ -52,6 +52,7 @@ export default function UnifiedStrategiesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedStrategyType, setSelectedStrategyType] = useState<StrategyType>()
+  const [editingStrategy, setEditingStrategy] = useState<{ strategy: Strategy, type: StrategyType } | null>(null)
   const [allStrategies, setAllStrategies] = useState<{
     dca: Strategy[]
     gridTrading: Strategy[]
@@ -61,7 +62,7 @@ export default function UnifiedStrategiesPage() {
     gridTrading: [],
     smaCrossover: []
   })
-  
+
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -158,39 +159,72 @@ export default function UnifiedStrategiesPage() {
 
   const handleCreateGridTradingStrategy = useCallback(async (data: CreateGridTradingStrategyRequest) => {
     try {
-      await apiClient.createGridTradingStrategy(data)
+      if (editingStrategy) {
+        // Update existing strategy
+        await apiClient.updateGridTradingStrategy(editingStrategy.strategy.id, {
+          name: data.name,
+          status: data.status,
+          config: data.config
+        })
+      } else {
+        // Create new strategy
+        await apiClient.createGridTradingStrategy(data)
+      }
       await loadAllStrategies()
       setViewMode('overview')
       setSelectedStrategyType(undefined)
+      setEditingStrategy(null)
     } catch (error) {
-      console.error('Failed to create grid trading strategy:', error)
+      console.error('Failed to create/update grid trading strategy:', error)
       throw error
     }
-  }, [loadAllStrategies])
+  }, [loadAllStrategies, editingStrategy])
 
   const handleCreateSMACrossoverStrategy = useCallback(async (data: CreateSMACrossoverStrategyRequest) => {
     try {
-      await apiClient.createSMACrossoverStrategy(data)
+      if (editingStrategy) {
+        // Update existing strategy
+        await apiClient.updateSMACrossoverStrategy(editingStrategy.strategy.id, {
+          name: data.name,
+          status: data.status,
+          config: data.config
+        })
+      } else {
+        // Create new strategy
+        await apiClient.createSMACrossoverStrategy(data)
+      }
       await loadAllStrategies()
       setViewMode('overview')
       setSelectedStrategyType(undefined)
+      setEditingStrategy(null)
     } catch (error) {
-      console.error('Failed to create SMA crossover strategy:', error)
+      console.error('Failed to create/update SMA crossover strategy:', error)
       throw error
     }
-  }, [loadAllStrategies])
+  }, [loadAllStrategies, editingStrategy])
 
   const handleCreateDCAStrategy = useCallback(async (data: CreateDCAStrategyRequest) => {
     try {
-      await apiClient.createDCAStrategy(data)
+      if (editingStrategy) {
+        // Update existing strategy
+        await apiClient.updateDCAStrategy(editingStrategy.strategy.id, {
+          name: data.name,
+          status: data.status,
+          config: data.config
+        })
+      } else {
+        // Create new strategy
+        await apiClient.createDCAStrategy(data)
+      }
       await loadAllStrategies()
       setViewMode('overview')
       setSelectedStrategyType(undefined)
+      setEditingStrategy(null)
     } catch (error) {
-      console.error('Failed to create DCA strategy:', error)
+      console.error('Failed to create/update DCA strategy:', error)
       throw error
     }
-  }, [loadAllStrategies])
+  }, [loadAllStrategies, editingStrategy])
 
   const handleBacktestStrategy = useCallback((type: StrategyType, config: StrategyConfig, name: string, assetSymbol: string) => {
     // Redirect to backtesting lab with strategy configuration
@@ -213,12 +247,19 @@ export default function UnifiedStrategiesPage() {
   const handleCancelStrategy = useCallback(() => {
     setViewMode('overview')
     setSelectedStrategyType(undefined)
+    setEditingStrategy(null)
   }, [])
 
 
+  const handleEditStrategy = (strategy: Strategy, type: StrategyType) => {
+    setEditingStrategy({ strategy, type })
+    setSelectedStrategyType(type)
+    setViewMode('configure')
+  }
+
   const handleDeleteStrategy = async (strategy: Strategy, type: StrategyType) => {
     if (!confirm(`Are you sure you want to delete "${strategy.name}"?`)) return
-    
+
     try {
       switch (type) {
         case 'dca':
@@ -398,11 +439,11 @@ export default function UnifiedStrategiesPage() {
                     <SelectTrigger className="w-full sm:w-[150px] bg-white/10 border-white/20 text-white">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/90 border-white/20">
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="paused">Paused</SelectItem>
-                      <SelectItem value="stopped">Stopped</SelectItem>
+                    <SelectContent className="bg-black/90 border-white/20 text-white">
+                      <SelectItem value="all" className="text-white hover:bg-white/10">All Status</SelectItem>
+                      <SelectItem value="active" className="text-white hover:bg-white/10">Active</SelectItem>
+                      <SelectItem value="paused" className="text-white hover:bg-white/10">Paused</SelectItem>
+                      <SelectItem value="stopped" className="text-white hover:bg-white/10">Stopped</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -410,11 +451,11 @@ export default function UnifiedStrategiesPage() {
                     <SelectTrigger className="w-full sm:w-[150px] bg-white/10 border-white/20 text-white">
                       <SelectValue placeholder="Type" />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/90 border-white/20">
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="dca">DCA</SelectItem>
-                      <SelectItem value="grid_trading">Grid Trading</SelectItem>
-                      <SelectItem value="sma_crossover">SMA Crossover</SelectItem>
+                    <SelectContent className="bg-black/90 border-white/20 text-white">
+                      <SelectItem value="all" className="text-white hover:bg-white/10">All Types</SelectItem>
+                      <SelectItem value="dca" className="text-white hover:bg-white/10">DCA</SelectItem>
+                      <SelectItem value="grid_trading" className="text-white hover:bg-white/10">Grid Trading</SelectItem>
+                      <SelectItem value="sma_crossover" className="text-white hover:bg-white/10">SMA Crossover</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -433,6 +474,7 @@ export default function UnifiedStrategiesPage() {
                     key={`${type}-${strategy.id}`}
                     strategy={strategy}
                     strategyType={type}
+                    onEdit={(s) => handleEditStrategy(s, type)}
                     onDelete={(s) => handleDeleteStrategy(s, type)}
                     className="h-full"
                   />
@@ -480,14 +522,16 @@ export default function UnifiedStrategiesPage() {
           <div className="max-w-4xl mx-auto">
             {selectedStrategyType === 'dca' && (
               <DCAConfig
+                initialData={editingStrategy?.strategy}
                 onSubmit={handleCreateDCAStrategy}
                 onCancel={handleCancelStrategy}
                 onBacktest={dcaBacktestHandler}
               />
             )}
-            
+
             {selectedStrategyType === 'grid_trading' && (
               <GridTradingConfig
+                initialData={editingStrategy?.strategy}
                 onSubmit={handleCreateGridTradingStrategy}
                 onCancel={handleCancelStrategy}
                 onBacktest={gridTradingBacktestHandler}
@@ -496,6 +540,7 @@ export default function UnifiedStrategiesPage() {
 
             {selectedStrategyType === 'sma_crossover' && (
               <SMAConfig
+                initialData={editingStrategy?.strategy}
                 onSubmit={handleCreateSMACrossoverStrategy}
                 onCancel={handleCancelStrategy}
                 onBacktest={smaBacktestHandler}

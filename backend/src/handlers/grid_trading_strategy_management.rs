@@ -1,4 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage};
+use std::sync::Arc;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder, QuerySelect};
 use uuid::Uuid;
@@ -15,18 +16,33 @@ use crate::models::grid_trading_strategy::{
 };
 use crate::services::MarketDataService;
 use crate::utils::errors::AppError;
+use actix_session::SessionExt;
+
+/// Extract authenticated user ID from session
+fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
+    let session = req.get_session();
+
+    if let Ok(Some(user_id_str)) = session.get::<String>("user_id") {
+        if let Ok(Some(authenticated)) = session.get::<bool>("authenticated") {
+            if authenticated {
+                if let Ok(user_id) = Uuid::parse_str(&user_id_str) {
+                    return Ok(user_id);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized("Authentication required".to_string()))
+}
 
 /// Create a new Grid Trading strategy
 pub async fn create_grid_trading_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     body: web::Json<CreateGridTradingStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Get user ID from request extensions (set by auth middleware)
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    // Get user ID from session
+    let user_id = get_user_id_from_session(&req)?;
 
     // Validate request
     body.validate().map_err(AppError::ValidationError)?;
@@ -35,7 +51,7 @@ pub async fn create_grid_trading_strategy(
     let existing_strategy = GridTradingStrategyEntity::find()
         .filter(crate::models::grid_trading_strategy::Column::UserId.eq(user_id))
         .filter(crate::models::grid_trading_strategy::Column::Name.eq(&body.name))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -51,8 +67,9 @@ pub async fn create_grid_trading_strategy(
         .map_err(|e| AppError::BadRequest(format!("Failed to serialize GridTradingConfig: {}", e)))?;
 
     // Create the strategy
+    let strategy_id = Uuid::new_v4();
     let new_strategy = GridTradingStrategyActiveModel {
-        id: Set(Uuid::new_v4()),
+        id: Set(strategy_id),
         user_id: Set(user_id),
         name: Set(body.name.clone()),
         asset_symbol: Set(body.asset_symbol.to_uppercase()),
@@ -81,9 +98,18 @@ pub async fn create_grid_trading_strategy(
         updated_at: Set(Utc::now()),
     };
 
-    let strategy = new_strategy.insert(db.get_ref())
+    // Insert without returning (to avoid UnpackInsertId error)
+    GridTradingStrategyEntity::insert(new_strategy)
+        .exec_without_returning(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
+
+    // Fetch the created strategy
+    let strategy = GridTradingStrategyEntity::find_by_id(strategy_id)
+        .one(db.as_ref().as_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or(AppError::InternalServerError)?;
 
     // Convert to response format
     let response = GridTradingStrategyResponse {
@@ -127,20 +153,17 @@ pub async fn create_grid_trading_strategy(
 
 /// Get user's Grid Trading strategies
 pub async fn get_grid_trading_strategies(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     market_service: web::Data<MarketDataService>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Get user's strategies
     let strategies = GridTradingStrategyEntity::find()
         .filter(crate::models::grid_trading_strategy::Column::UserId.eq(user_id))
         .order_by_desc(crate::models::grid_trading_strategy::Column::CreatedAt)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -157,7 +180,7 @@ pub async fn get_grid_trading_strategies(
             .filter(crate::models::grid_trading_strategy::execution::Column::StrategyId.eq(strategy.id))
             .order_by_desc(crate::models::grid_trading_strategy::execution::Column::ExecutionTimestamp)
             .limit(10)
-            .all(db.get_ref())
+            .all(db.as_ref().as_ref())
             .await
             .map_err(AppError::DatabaseError)?;
 
@@ -273,21 +296,18 @@ pub async fn get_grid_trading_strategies(
 
 /// Get a specific Grid Trading strategy
 pub async fn get_grid_trading_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     market_service: web::Data<MarketDataService>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Get the strategy
     let strategy = GridTradingStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -302,7 +322,7 @@ pub async fn get_grid_trading_strategy(
         .filter(crate::models::grid_trading_strategy::execution::Column::StrategyId.eq(strategy.id))
         .order_by_desc(crate::models::grid_trading_strategy::execution::Column::ExecutionTimestamp)
         .limit(50)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -389,15 +409,12 @@ pub async fn get_grid_trading_strategy(
 
 /// Update a Grid Trading strategy
 pub async fn update_grid_trading_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<UpdateGridTradingStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
@@ -406,7 +423,7 @@ pub async fn update_grid_trading_strategy(
 
     // Get the strategy
     let mut strategy: GridTradingStrategyActiveModel = GridTradingStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?
@@ -445,7 +462,7 @@ pub async fn update_grid_trading_strategy(
     strategy.updated_at = Set(Utc::now());
 
     // Save changes
-    let updated_strategy = strategy.update(db.get_ref())
+    let updated_strategy = strategy.update(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -491,20 +508,17 @@ pub async fn update_grid_trading_strategy(
 
 /// Delete a Grid Trading strategy
 pub async fn delete_grid_trading_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Get the strategy
     let strategy = GridTradingStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -516,7 +530,7 @@ pub async fn delete_grid_trading_strategy(
 
     // Delete the strategy (cascading delete will handle executions)
     GridTradingStrategyEntity::delete_by_id(strategy_id)
-        .exec(db.get_ref())
+        .exec(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -527,18 +541,15 @@ pub async fn delete_grid_trading_strategy(
 
 /// Get Grid Trading strategy execution statistics
 pub async fn get_grid_trading_execution_stats(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Get user's strategies to calculate stats
     let strategies = GridTradingStrategyEntity::find()
         .filter(crate::models::grid_trading_strategy::Column::UserId.eq(user_id))
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 

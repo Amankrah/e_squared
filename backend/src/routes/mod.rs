@@ -148,6 +148,7 @@ fn configure_session_routes(cfg: &mut web::ServiceConfig) {
 
 /// Configure exchange connection routes
 fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
+    tracing::info!("Configuring exchange routes...");
     cfg.service(
         web::scope("/exchanges")
             .route("/connections", web::post().to(exchange_management::create_exchange_connection))
@@ -158,6 +159,7 @@ fn configure_exchange_routes(cfg: &mut web::ServiceConfig) {
             .route("/connections/{connection_id}/live-balances", web::post().to(exchange_management::get_live_wallet_balances))
             .route("/live-balances", web::post().to(exchange_management::get_all_live_user_balances))
     );
+    tracing::info!("Exchange routes configured");
 }
 
 /// Configure DCA strategy routes
@@ -230,5 +232,6 @@ fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
             .route("/btc-dominance", web::get().to(market_data::get_btc_dominance))
             .route("/m2", web::get().to(market_data::get_m2))
             .route("/btc-price", web::get().to(market_data::get_btc_price))
+            .route("/fear-greed", web::get().to(market_data::get_fear_greed_index))
     );
 }

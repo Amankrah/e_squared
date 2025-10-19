@@ -1,4 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage};
+use actix_session::SessionExt;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
@@ -18,6 +19,23 @@ use crate::utils::{
 };
 use crate::exchange_connectors::{Exchange, ExchangeFactory, ExchangeCredentials};
 
+/// Extract authenticated user ID from session
+fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
+    let session = req.get_session();
+
+    if let Ok(Some(user_id_str)) = session.get::<String>("user_id") {
+        if let Ok(Some(authenticated)) = session.get::<bool>("authenticated") {
+            if authenticated {
+                if let Ok(user_id) = Uuid::parse_str(&user_id_str) {
+                    return Ok(user_id);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized("Authentication required".to_string()))
+}
+
 
 /// Create a new exchange connection
 pub async fn create_exchange_connection(
@@ -25,11 +43,8 @@ pub async fn create_exchange_connection(
     req: HttpRequest,
     body: web::Json<CreateExchangeConnectionRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Get user ID from request extensions (set by auth middleware)
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    // Get user ID from session
+    let user_id = get_user_id_from_session(&req)?;
 
     // Check if user exists in database
     let user_exists = UserEntity::find_by_id(user_id)
@@ -239,27 +254,38 @@ pub async fn get_exchange_connections(
     db: web::Data<DatabaseConnection>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    eprintln!("HANDLER CALLED - get_exchange_connections");
 
+    // Get user ID from session
+    let user_id = get_user_id_from_session(&req)?;
+    eprintln!("User ID: {}", user_id);
+
+    // Query database for connections
     let connections = ExchangeConnectionEntity::find()
         .filter(exchange_connection::Column::UserId.eq(user_id))
         .all(db.get_ref())
         .await
-        .map_err(AppError::DatabaseError)?;
+        .map_err(|e| {
+            eprintln!("DB ERROR: {:?}", e);
+            AppError::DatabaseError(e)
+        })?;
 
+    eprintln!("Found {} connections", connections.len());
+
+    // Convert to response format
     let responses: Vec<ExchangeConnectionResponse> = connections
         .into_iter()
         .map(ExchangeConnectionResponse::from)
         .collect();
 
-    // Return connections in the format expected by frontend (with connections wrapper)
+    eprintln!("Converted to response format");
+
+    // Return JSON response
     let response = serde_json::json!({
         "connections": responses
     });
-    
+
+    eprintln!("Returning HTTP response");
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -274,10 +300,7 @@ pub async fn update_exchange_connection(
     let connection_id = Uuid::parse_str(&connection_id_str)
         .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
 
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     body.validate().map_err(AppError::ValidationError)?;
 
@@ -343,10 +366,7 @@ pub async fn delete_exchange_connection(
     let connection_id = Uuid::parse_str(&connection_id_str)
         .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
 
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Verify the connection belongs to the user
     let connection = ExchangeConnectionEntity::find()
@@ -379,10 +399,7 @@ pub async fn sync_exchange_balances(
     let connection_id = Uuid::parse_str(&connection_id_str)
         .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
 
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let password = body.get("password")
         .and_then(|p| p.as_str())
@@ -541,10 +558,7 @@ pub async fn get_live_wallet_balances(
     let connection_id = Uuid::parse_str(&connection_id_str)
         .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
 
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let password = body.get("password")
         .and_then(|p| p.as_str())
@@ -640,10 +654,7 @@ pub async fn get_all_live_user_balances(
     req: HttpRequest,
     body: web::Json<serde_json::Value>, // Expecting { "password": "user_password" }
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let password = body.get("password")
         .and_then(|p| p.as_str())
@@ -762,15 +773,15 @@ pub async fn get_account_by_type(
 ) -> Result<HttpResponse, AppError> {
     let account_type = path.into_inner();
     
-    // Get user_id from query parameters for non-authenticated access
-    let user_id = if let Some(user_id) = req.extensions().get::<Uuid>() {
-        *user_id
+    // Get user_id from session or query parameters for non-authenticated access
+    let user_id = if let Ok(user_id) = get_user_id_from_session(&req) {
+        user_id
     } else {
         // Try to get from query parameters
         let user_id_str = query.get("user_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::BadRequest("user_id parameter required".to_string()))?;
-        
+
         Uuid::parse_str(user_id_str)
             .map_err(|_| AppError::BadRequest("Invalid user ID format".to_string()))?
     };
@@ -813,14 +824,14 @@ pub async fn test_connection_status(
     let connection_id = Uuid::parse_str(connection_id_str)
         .map_err(|_| AppError::BadRequest("Invalid connection ID format".to_string()))?;
 
-    // Get user_id from request extensions or query
-    let user_id = if let Some(user_id) = req.extensions().get::<Uuid>() {
-        *user_id
+    // Get user_id from session or query
+    let user_id = if let Ok(user_id) = get_user_id_from_session(&req) {
+        user_id
     } else {
         let user_id_str = query.get("user_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::BadRequest("user_id parameter required".to_string()))?;
-        
+
         Uuid::parse_str(user_id_str)
             .map_err(|_| AppError::BadRequest("Invalid user ID format".to_string()))?
     };

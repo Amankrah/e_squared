@@ -224,3 +224,10 @@ impl From<serde_json::Error> for AppError {
         AppError::ParseError(format!("JSON serialization error: {}", err))
     }
 }
+
+impl From<actix_web::Error> for AppError {
+    fn from(err: actix_web::Error) -> Self {
+        tracing::error!("Actix-web error converted to AppError: {:?}", err);
+        AppError::InternalServerError
+    }
+}

@@ -2,6 +2,7 @@ use actix_web::{web, HttpResponse, Result, HttpRequest};
 use actix_session::{Session, SessionExt};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -31,7 +32,7 @@ fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
 }
 
 pub async fn create_profile(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     http_req: HttpRequest,
     req: web::Json<CreateUserProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -41,20 +42,21 @@ pub async fn create_profile(
 
     let existing_profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
     if existing_profile.is_some() {
-        return Err(AppError::ValidationError(
-            validator::ValidationErrors::new()
+        return Err(AppError::BadRequest(
+            "Profile already exists for this user".to_string()
         ));
     }
 
     let join_date = Utc::now().format("%B %Y").to_string();
+    let profile_id = Uuid::new_v4();
 
     let new_profile = UserProfileActiveModel {
-        id: Set(Uuid::new_v4()),
+        id: Set(profile_id),
         user_id: Set(user_id),
         name: Set(req.name.clone()),
         email: Set(req.email.clone()),
@@ -68,44 +70,55 @@ pub async fn create_profile(
         updated_at: Set(Utc::now()),
     };
 
-    let profile = new_profile
-        .insert(db.get_ref())
+    // Insert without returning (SQLite doesn't support returning the inserted row easily)
+    UserProfileEntity::insert(new_profile)
+        .exec_without_returning(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
-    println!("Profile created successfully: {:?}", profile);
+    // Fetch the created profile
+    let profile = UserProfileEntity::find_by_id(profile_id)
+        .one(db.as_ref().as_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or(AppError::InternalServerError)?;
 
     let response = UserProfileResponse::from(profile);
-    println!("Response created: {:?}", response);
 
     Ok(HttpResponse::Created().json(response))
 }
 
 pub async fn get_profile(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     http_req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
     let user_id = get_user_id_from_session(&http_req)?;
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
-        .map_err(AppError::DatabaseError)?
-        .ok_or(AppError::ProfileNotFound)?;
+        .map_err(AppError::DatabaseError)?;
 
-    let response = UserProfileResponse::from(profile);
-    Ok(HttpResponse::Ok().json(response))
+    match profile {
+        Some(profile) => {
+            let response = UserProfileResponse::from(profile);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            Err(AppError::NotFound("Profile not found".to_string()))
+        }
+    }
 }
 
 pub async fn get_profile_by_id(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     let profile_id = path.into_inner();
 
     let profile = UserProfileEntity::find_by_id(profile_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or(AppError::ProfileNotFound)?;
@@ -117,7 +130,7 @@ pub async fn get_profile_by_id(
 }
 
 pub async fn update_profile(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     http_req: HttpRequest,
     req: web::Json<UpdateUserProfileRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -127,7 +140,7 @@ pub async fn update_profile(
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or(AppError::ProfileNotFound)?;
@@ -156,7 +169,7 @@ pub async fn update_profile(
     profile_active_model.updated_at = Set(Utc::now());
 
     let updated_profile = profile_active_model
-        .update(db.get_ref())
+        .update(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -165,20 +178,20 @@ pub async fn update_profile(
 }
 
 pub async fn delete_profile(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     http_req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
     let user_id = get_user_id_from_session(&http_req)?;
 
     let profile = UserProfileEntity::find()
         .filter(user_profile::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or(AppError::ProfileNotFound)?;
 
     UserProfileEntity::delete_by_id(profile.id)
-        .exec(db.get_ref())
+        .exec(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 

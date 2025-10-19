@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, DollarSign, Bitcoin, Wallet } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, Bitcoin, Wallet, Activity } from "lucide-react"
 
 interface BtcDominanceData {
   value: string
@@ -25,6 +25,13 @@ interface BtcPriceData {
   percent_change_24h: string | null
   high_24h: string | null
   low_24h: string | null
+  timestamp: number
+}
+
+interface FearGreedData {
+  value: number
+  classification: string
+  change_24h: number | null
   timestamp: number
 }
 
@@ -339,6 +346,147 @@ export function BtcPriceIndicator() {
             )}
           </div>
         )}
+        <p className="text-xs text-gray-400 mt-1">
+          Live Data · Updated {new Date(data.timestamp * 1000).toLocaleTimeString()}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function FearGreedIndicator() {
+  const [data, setData] = useState<FearGreedData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5 * 60 * 1000) // Refresh every 5 minutes
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/market-data/fear-greed', {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) throw new Error(`Failed to fetch Fear & Greed: ${response.statusText}`)
+
+      const result = await response.json()
+      setData(result)
+      setError(null)
+    } catch (err) {
+      console.error('Error fetching Fear & Greed:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Helper function to get color based on classification
+  const getClassificationColor = (classification: string) => {
+    switch (classification.toLowerCase()) {
+      case 'extreme fear':
+        return 'from-red-500 to-red-700'
+      case 'fear':
+        return 'from-orange-500 to-red-600'
+      case 'neutral':
+        return 'from-yellow-500 to-orange-600'
+      case 'greed':
+        return 'from-green-500 to-emerald-600'
+      case 'extreme greed':
+        return 'from-emerald-500 to-green-700'
+      default:
+        return 'from-gray-500 to-gray-600'
+    }
+  }
+
+  // Helper function to get badge color
+  const getBadgeColor = (classification: string) => {
+    switch (classification.toLowerCase()) {
+      case 'extreme fear':
+      case 'fear':
+        return 'bg-red-500/20 text-red-300 border-red-400/30'
+      case 'neutral':
+        return 'bg-yellow-500/20 text-yellow-300 border-yellow-400/30'
+      case 'greed':
+      case 'extreme greed':
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+      default:
+        return 'bg-gray-500/20 text-gray-300 border-gray-400/30'
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-200">Fear & Greed Index</CardTitle>
+          <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+            <Activity className="h-4 w-4 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-white">Loading...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-200">Fear & Greed Index</CardTitle>
+          <div className="h-8 w-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+            <Activity className="h-4 w-4 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-gray-400">Unable to load</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const change24h = data.change_24h
+  const isPositive = change24h !== null && change24h >= 0
+
+  return (
+    <Card className="border-2 border-[rgba(147,51,234,0.3)] bg-gradient-to-br from-[rgba(147,51,234,0.1)] to-[rgba(147,51,234,0.02)] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-gray-200">Fear & Greed Index</CardTitle>
+        <div className={`h-8 w-8 bg-gradient-to-br ${getClassificationColor(data.classification)} rounded-lg flex items-center justify-center`}>
+          <Activity className="h-4 w-4 text-white" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold text-white">{data.value}</div>
+        <div className="flex items-center gap-2 mt-1">
+          <Badge
+            className={`flex items-center gap-1 ${getBadgeColor(data.classification)}`}
+          >
+            {data.classification}
+          </Badge>
+          {change24h !== null && (
+            <Badge
+              variant={isPositive ? "default" : "destructive"}
+              className={`flex items-center gap-1 ${isPositive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-red-500/20 text-red-300 border-red-400/30'}`}
+            >
+              {isPositive ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
+              {isPositive ? '+' : ''}{change24h}
+            </Badge>
+          )}
+        </div>
         <p className="text-xs text-gray-400 mt-1">
           Live Data · Updated {new Date(data.timestamp * 1000).toLocaleTimeString()}
         </p>

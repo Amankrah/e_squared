@@ -23,7 +23,7 @@ import { MultiStrategyOverview } from "@/components/dashboard/multi-strategy-ove
 import { StrategyTypeStats } from "@/components/dashboard/strategy-type-stats"
 import { QuickActionsPanel } from "@/components/dashboard/quick-actions-panel"
 import { DxyIndicator } from "@/components/dashboard/dxy-indicator"
-import { BtcDominanceIndicator, M2Indicator, BtcPriceIndicator } from "@/components/dashboard/market-indicators"
+import { BtcDominanceIndicator, M2Indicator, BtcPriceIndicator, FearGreedIndicator } from "@/components/dashboard/market-indicators"
 import { apiClient, DCAStrategy, ExchangeConnection, Strategy, StrategyType } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import Link from "next/link"
@@ -332,9 +332,10 @@ export default function Dashboard() {
         </div>
 
         {/* Market Indicators Section */}
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <BtcDominanceIndicator />
           <M2Indicator />
+          <FearGreedIndicator />
         </div>
 
         {/* Strategy Type Breakdown */}

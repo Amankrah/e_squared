@@ -148,11 +148,12 @@ impl MarketDataService {
         }
     }
 
-    /// Get current Fear & Greed Index
-    pub async fn get_fear_greed_index(&self) -> Result<i32, AppError> {
+    /// Get current Fear & Greed Index with 24hr history
+    pub async fn get_fear_greed_index(&self) -> Result<(i32, Option<i32>), AppError> {
         self.rate_limiter.wait_if_needed("fear_greed").await;
 
-        let url = format!("{}?limit=1", self.fear_greed_url);
+        // Get current and yesterday's data
+        let url = format!("{}?limit=2", self.fear_greed_url);
 
         let response = self.client
             .get(&url)
@@ -176,15 +177,25 @@ impl MarketDataService {
                 AppError::InternalServerError
             })?;
 
-        if let Some(data) = fear_greed.data.first() {
+        // Get current value
+        let current_value = if let Some(data) = fear_greed.data.first() {
             data.value.parse::<i32>()
                 .map_err(|e| {
                     error!("Failed to parse Fear & Greed value: {}", e);
                     AppError::InternalServerError
-                })
+                })?
         } else {
-            Err(AppError::InternalServerError)
-        }
+            return Err(AppError::InternalServerError);
+        };
+
+        // Get yesterday's value if available
+        let yesterday_value = if fear_greed.data.len() > 1 {
+            fear_greed.data[1].value.parse::<i32>().ok()
+        } else {
+            None
+        };
+
+        Ok((current_value, yesterday_value))
     }
 
     /// Get current price from CoinGecko
@@ -421,7 +432,7 @@ impl MarketDataService {
 
         // Small delay before next API call
         sleep(Duration::from_millis(200)).await;
-        let fear_greed = self.get_fear_greed_index().await.ok();
+        let fear_greed = self.get_fear_greed_index().await.ok().map(|(current, _)| current);
 
         // Small delay before next API call
         sleep(Duration::from_millis(200)).await;

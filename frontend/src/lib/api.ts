@@ -950,11 +950,16 @@ class ApiClient {
           // Clear any stored tokens/state on unauthorized
           this.setCsrfToken(null)
         }
-        
-        const errorData = await response.json().catch(() => ({ 
-          error: response.status === 401 ? 'Authentication required' : 'Unknown error' 
+
+        const errorData = await response.json().catch(() => ({
+          error: response.status === 401 ? 'Authentication required' : 'Unknown error'
         }))
         throw new ApiError(response.status, errorData.message || errorData.error || 'Request failed')
+      }
+
+      // Handle 204 No Content responses
+      if (response.status === 204) {
+        return {} as T
       }
 
       return response.json()
@@ -1214,16 +1219,9 @@ class ApiClient {
   }
 
   async createDCAStrategy(data: CreateDCAStrategyRequest): Promise<DCAStrategy> {
-    // Transform the data to match backend expectations
-    const transformedData = {
-      name: data.name,
-      asset_symbol: data.asset_symbol,
-      config_json: JSON.stringify(data.config)
-    }
-
     return this.request<DCAStrategy>('/dca/strategies', {
       method: 'POST',
-      body: JSON.stringify(transformedData),
+      body: JSON.stringify(data),
     })
   }
 

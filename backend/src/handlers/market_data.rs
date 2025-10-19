@@ -6,7 +6,7 @@ use std::str::FromStr;
 use tracing::{info, error, debug};
 
 use crate::utils::errors::AppError;
-use crate::services::{DxyService, MarketIndicatorsService};
+use crate::services::{DxyService, MarketIndicatorsService, MarketDataService};
 
 const BINANCE_API_BASE: &str = "https://api.binance.com";
 
@@ -143,4 +143,43 @@ pub async fn get_btc_price(
     info!("BTC Price: ${}", btc_price.price);
 
     Ok(HttpResponse::Ok().json(btc_price))
+}
+
+/// Get Fear & Greed Index
+pub async fn get_fear_greed_index(
+    market_data_service: web::Data<MarketDataService>,
+) -> Result<HttpResponse, AppError> {
+    info!("Fetching Fear & Greed Index data");
+
+    let (current_value, yesterday_value) = market_data_service.get_fear_greed_index().await?;
+
+    #[derive(Serialize)]
+    struct FearGreedResponse {
+        value: i32,
+        classification: String,
+        change_24h: Option<i32>,
+        timestamp: i64,
+    }
+
+    let classification = match current_value {
+        0..=24 => "Extreme Fear",
+        25..=44 => "Fear",
+        45..=55 => "Neutral",
+        56..=75 => "Greed",
+        76..=100 => "Extreme Greed",
+        _ => "Unknown",
+    };
+
+    let change_24h = yesterday_value.map(|yesterday| current_value - yesterday);
+
+    let response = FearGreedResponse {
+        value: current_value,
+        classification: classification.to_string(),
+        change_24h,
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    info!("Fear & Greed Index: {} ({}) | 24h Change: {:?}", current_value, classification, change_24h);
+
+    Ok(HttpResponse::Ok().json(response))
 }

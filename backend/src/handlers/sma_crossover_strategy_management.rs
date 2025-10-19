@@ -1,4 +1,6 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage};
+use actix_session::SessionExt;
+use std::sync::Arc;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder, QuerySelect};
 use uuid::Uuid;
@@ -14,17 +16,30 @@ use crate::models::sma_crossover_strategy::{
 };
 use crate::utils::errors::AppError;
 
+/// Extract authenticated user ID from session
+fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
+    let session = req.get_session();
+
+    if let Ok(Some(user_id_str)) = session.get::<String>("user_id") {
+        if let Ok(Some(authenticated)) = session.get::<bool>("authenticated") {
+            if authenticated {
+                if let Ok(user_id) = Uuid::parse_str(&user_id_str) {
+                    return Ok(user_id);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Unauthorized("Authentication required".to_string()))
+}
+
 /// Create a new SMA Crossover strategy
 pub async fn create_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     body: web::Json<CreateSMACrossoverStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    // Get user ID from request extensions (set by auth middleware)
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Validate request
     body.validate().map_err(AppError::ValidationError)?;
@@ -33,7 +48,7 @@ pub async fn create_sma_crossover_strategy(
     let existing_strategy = SMACrossoverStrategyEntity::find()
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
         .filter(crate::models::sma_crossover_strategy::Column::Name.eq(&body.name))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -79,8 +94,18 @@ pub async fn create_sma_crossover_strategy(
         updated_at: Set(now),
     };
 
-    let saved_strategy = new_strategy.insert(db.get_ref()).await
+    // Insert without returning (to avoid UnpackInsertId error)
+    SMACrossoverStrategyEntity::insert(new_strategy)
+        .exec_without_returning(db.as_ref().as_ref())
+        .await
         .map_err(AppError::DatabaseError)?;
+
+    // Fetch the created strategy
+    let saved_strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
+        .one(db.as_ref().as_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or(AppError::InternalServerError)?;
 
     // Convert to response format
     let response = SMACrossoverStrategyResponse {
@@ -119,19 +144,16 @@ pub async fn create_sma_crossover_strategy(
 
 /// Get all SMA Crossover strategies for a user
 pub async fn get_user_sma_crossover_strategies(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     // Get all strategies for the user
     let strategies = SMACrossoverStrategyEntity::find()
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
         .order_by_desc(crate::models::sma_crossover_strategy::Column::CreatedAt)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -149,7 +171,7 @@ pub async fn get_user_sma_crossover_strategies(
             .filter(crate::models::sma_crossover_strategy::execution::Column::StrategyId.eq(strategy.id))
             .order_by_desc(crate::models::sma_crossover_strategy::execution::Column::ExecutionTimestamp)
             .limit(10)
-            .all(db.get_ref())
+            .all(db.as_ref().as_ref())
             .await
             .map_err(AppError::DatabaseError)?;
 
@@ -240,20 +262,17 @@ pub async fn get_user_sma_crossover_strategies(
 
 /// Get a specific SMA Crossover strategy by ID
 pub async fn get_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     let strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -265,7 +284,7 @@ pub async fn get_sma_crossover_strategy(
         .filter(crate::models::sma_crossover_strategy::execution::Column::StrategyId.eq(strategy.id))
         .order_by_desc(crate::models::sma_crossover_strategy::execution::Column::ExecutionTimestamp)
         .limit(20)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -328,22 +347,19 @@ pub async fn get_sma_crossover_strategy(
 
 /// Update an existing SMA Crossover strategy
 pub async fn update_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<UpdateSMACrossoverStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Find and validate ownership
     let strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -378,7 +394,7 @@ pub async fn update_sma_crossover_strategy(
 
     if updated {
         strategy_update.updated_at = Set(Utc::now());
-        let updated_strategy = strategy_update.update(db.get_ref()).await
+        let updated_strategy = strategy_update.update(db.as_ref().as_ref()).await
             .map_err(AppError::DatabaseError)?;
 
         let config = updated_strategy.get_sma_crossover_config().map_err(|e| AppError::BadRequest(e))?;
@@ -422,21 +438,18 @@ pub async fn update_sma_crossover_strategy(
 
 /// Delete an SMA Crossover strategy
 pub async fn delete_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Find and validate ownership
     let strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -444,13 +457,13 @@ pub async fn delete_sma_crossover_strategy(
     // Delete associated executions first
     SMACrossoverExecutionEntity::delete_many()
         .filter(crate::models::sma_crossover_strategy::execution::Column::StrategyId.eq(strategy_id))
-        .exec(db.get_ref())
+        .exec(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
     // Delete the strategy
     let strategy_model: SMACrossoverStrategyActiveModel = strategy.into();
-    strategy_model.delete(db.get_ref()).await
+    strategy_model.delete(db.as_ref().as_ref()).await
         .map_err(AppError::DatabaseError)?;
 
     Ok(HttpResponse::NoContent().finish())
@@ -458,21 +471,18 @@ pub async fn delete_sma_crossover_strategy(
 
 /// Pause an SMA Crossover strategy
 pub async fn pause_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Find and validate ownership
     let strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -485,7 +495,7 @@ pub async fn pause_sma_crossover_strategy(
     strategy_update.status = Set("paused".to_string());
     strategy_update.updated_at = Set(Utc::now());
 
-    strategy_update.update(db.get_ref()).await
+    strategy_update.update(db.as_ref().as_ref()).await
         .map_err(AppError::DatabaseError)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -495,21 +505,18 @@ pub async fn pause_sma_crossover_strategy(
 
 /// Resume an SMA Crossover strategy
 pub async fn resume_sma_crossover_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let user_id = req.extensions()
-        .get::<Uuid>()
-        .copied()
-        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
+    let user_id = get_user_id_from_session(&req)?;
 
     let strategy_id = path.into_inner();
 
     // Find and validate ownership
     let strategy = SMACrossoverStrategyEntity::find_by_id(strategy_id)
         .filter(crate::models::sma_crossover_strategy::Column::UserId.eq(user_id))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -522,7 +529,7 @@ pub async fn resume_sma_crossover_strategy(
     strategy_update.status = Set("active".to_string());
     strategy_update.updated_at = Set(Utc::now());
 
-    strategy_update.update(db.get_ref()).await
+    strategy_update.update(db.as_ref().as_ref()).await
         .map_err(AppError::DatabaseError)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({

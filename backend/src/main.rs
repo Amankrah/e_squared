@@ -11,7 +11,7 @@ mod backtesting;
 mod strategies;
 
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer, middleware::Logger, cookie::Key};
+use actix_web::{web, App, HttpServer, middleware::Logger, cookie::Key, dev::Service as _};
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use anyhow::{Result, Context};
 use std::sync::Arc;
@@ -169,9 +169,39 @@ fn create_server(
             .app_data(web::Data::new(execution_engine.clone()))
             .app_data(web::Data::new(dxy_service.clone()))
             .app_data(web::Data::new(market_indicators.clone()))
+            // Custom JSON error handler for better error logging
+            .app_data(
+                web::JsonConfig::default()
+                    .limit(4096)
+                    .error_handler(|err, _req| {
+                        let err_msg = format!("{}", err);
+                        tracing::error!("JSON deserialization error: {}", err_msg);
+                        actix_web::error::InternalError::from_response(
+                            err,
+                            actix_web::HttpResponse::BadRequest().json(serde_json::json!({
+                                "error": "Invalid JSON",
+                                "message": format!("Failed to parse request body: {}", err_msg)
+                            }))
+                        ).into()
+                    })
+            )
             // Legacy strategy_template_service removed
             .wrap(cors)
             .wrap(Logger::default())
+            .wrap_fn(|req, srv| {
+                let path = req.path().to_string();
+                let method = req.method().to_string();
+                tracing::info!("Incoming {} request to {}", method, path);
+                let fut = srv.call(req);
+                async move {
+                    let res = fut.await?;
+                    let status = res.status();
+                    if status.is_server_error() {
+                        tracing::error!("Server error {} for {} {}", status, method, path);
+                    }
+                    Ok(res)
+                }
+            })
             .wrap(
                     SessionMiddleware::builder(
                         CookieSessionStore::default(), 
@@ -197,9 +227,22 @@ fn create_server(
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Set panic hook to log panics
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("PANIC OCCURRED: {:?}", panic_info);
+        if let Some(location) = panic_info.location() {
+            eprintln!("Panic at {}:{}:{}", location.file(), location.line(), location.column());
+        }
+        if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            eprintln!("Panic message: {}", s);
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            eprintln!("Panic message: {}", s);
+        }
+    }));
+
     // Load environment variables from .env in current directory
     dotenv::dotenv().ok();
-    
+
     // Initialize logging
     init_logging()
         .context("Failed to initialize logging system")?;

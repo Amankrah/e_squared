@@ -2,6 +2,7 @@ use actix_web::{web, HttpRequest, HttpResponse, Result, HttpMessage};
 use actix_session::{Session, SessionExt};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder, QuerySelect};
+use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
 use rust_decimal::Decimal;
@@ -38,7 +39,7 @@ fn get_user_id_from_session(req: &HttpRequest) -> Result<Uuid, AppError> {
 
 /// Create a new DCA strategy
 pub async fn create_dca_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     body: web::Json<CreateDCAStrategyRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -52,7 +53,7 @@ pub async fn create_dca_strategy(
     let existing_strategy = DCAStrategyEntity::find()
         .filter(crate::models::dca_strategy::Column::UserId.eq(user_id))
         .filter(crate::models::dca_strategy::Column::Name.eq(&body.name))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -78,8 +79,9 @@ pub async fn create_dca_strategy(
     };
 
     // Create the strategy
+    let strategy_id = Uuid::new_v4();
     let new_strategy = DCAStrategyActiveModel {
-        id: Set(Uuid::new_v4()),
+        id: Set(strategy_id),
         user_id: Set(user_id),
         name: Set(body.name.clone()),
         asset_symbol: Set(body.asset_symbol.to_uppercase()),
@@ -94,9 +96,18 @@ pub async fn create_dca_strategy(
         updated_at: Set(Utc::now()),
     };
 
-    let strategy = new_strategy.insert(db.get_ref())
+    // Insert without returning (to avoid UnpackInsertId error)
+    DCAStrategyEntity::insert(new_strategy)
+        .exec_without_returning(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
+
+    // Fetch the created strategy
+    let strategy = DCAStrategyEntity::find_by_id(strategy_id)
+        .one(db.as_ref().as_ref())
+        .await
+        .map_err(AppError::DatabaseError)?
+        .ok_or(AppError::InternalServerError)?;
 
     // Convert to response format
     let response = DCAStrategyResponse {
@@ -123,7 +134,7 @@ pub async fn create_dca_strategy(
 
 /// Get user's DCA strategies
 pub async fn get_dca_strategies(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     market_service: web::Data<MarketDataService>,
     req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
@@ -133,7 +144,7 @@ pub async fn get_dca_strategies(
     let strategies = DCAStrategyEntity::find()
         .filter(crate::models::dca_strategy::Column::UserId.eq(user_id))
         .order_by_desc(crate::models::dca_strategy::Column::CreatedAt)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -161,7 +172,7 @@ pub async fn get_dca_strategies(
             .filter(crate::models::dca_strategy::execution::Column::StrategyId.eq(strategy.id))
             .order_by_desc(crate::models::dca_strategy::execution::Column::ExecutionTimestamp)
             .limit(10)
-            .all(db.get_ref())
+            .all(db.as_ref().as_ref())
             .await
             .map_err(AppError::DatabaseError)?;
 
@@ -257,7 +268,7 @@ pub async fn get_dca_strategies(
 
 /// Get a specific DCA strategy
 pub async fn get_dca_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     market_service: web::Data<MarketDataService>,
     req: HttpRequest,
     path: web::Path<Uuid>,
@@ -268,7 +279,7 @@ pub async fn get_dca_strategy(
 
     // Get the strategy
     let strategy = DCAStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -283,7 +294,7 @@ pub async fn get_dca_strategy(
         .filter(crate::models::dca_strategy::execution::Column::StrategyId.eq(strategy.id))
         .order_by_desc(crate::models::dca_strategy::execution::Column::ExecutionTimestamp)
         .limit(50)
-        .all(db.get_ref())
+        .all(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -352,7 +363,7 @@ pub async fn get_dca_strategy(
 
 /// Update a DCA strategy
 pub async fn update_dca_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
     body: web::Json<UpdateDCAStrategyRequest>,
@@ -366,7 +377,7 @@ pub async fn update_dca_strategy(
 
     // Get the strategy
     let mut strategy: DCAStrategyActiveModel = DCAStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?
@@ -404,7 +415,7 @@ pub async fn update_dca_strategy(
     strategy.updated_at = Set(Utc::now());
 
     // Save changes
-    let updated_strategy = strategy.update(db.get_ref())
+    let updated_strategy = strategy.update(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -433,7 +444,7 @@ pub async fn update_dca_strategy(
 
 /// Delete a DCA strategy
 pub async fn delete_dca_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
@@ -443,7 +454,7 @@ pub async fn delete_dca_strategy(
 
     // Get the strategy
     let strategy = DCAStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -455,7 +466,7 @@ pub async fn delete_dca_strategy(
 
     // Delete the strategy (cascading delete will handle executions)
     DCAStrategyEntity::delete_by_id(strategy_id)
-        .exec(db.get_ref())
+        .exec(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -466,7 +477,7 @@ pub async fn delete_dca_strategy(
 
 /// Manually execute a DCA strategy
 pub async fn execute_dca_strategy(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     execution_engine: web::Data<DCAExecutionEngine>,
     req: HttpRequest,
     path: web::Path<Uuid>,
@@ -478,7 +489,7 @@ pub async fn execute_dca_strategy(
 
     // Verify ownership before allowing manual execution
     let strategy = DCAStrategyEntity::find_by_id(strategy_id)
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?
         .ok_or_else(|| AppError::NotFound("Strategy not found".to_string()))?;
@@ -579,7 +590,7 @@ pub async fn get_dca_presets(
 
 /// Create a DCA strategy from a preset
 pub async fn create_dca_strategy_from_preset(
-    db: web::Data<DatabaseConnection>,
+    db: web::Data<Arc<DatabaseConnection>>,
     req: HttpRequest,
     body: web::Json<CreateFromPresetRequest>,
 ) -> Result<HttpResponse, AppError> {
@@ -614,7 +625,7 @@ pub async fn create_dca_strategy_from_preset(
     let existing_strategy = DCAStrategyEntity::find()
         .filter(crate::models::dca_strategy::Column::UserId.eq(user_id))
         .filter(crate::models::dca_strategy::Column::Name.eq(&body.name))
-        .one(db.get_ref())
+        .one(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 
@@ -656,7 +667,7 @@ pub async fn create_dca_strategy_from_preset(
         updated_at: Set(Utc::now()),
     };
 
-    let strategy = new_strategy.insert(db.get_ref())
+    let strategy = new_strategy.insert(db.as_ref().as_ref())
         .await
         .map_err(AppError::DatabaseError)?;
 

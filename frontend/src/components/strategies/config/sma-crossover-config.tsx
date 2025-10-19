@@ -63,19 +63,19 @@ export function SMAConfig({
     name: initialData?.name || '',
     asset_symbol: initialData?.asset_symbol || '',
     config: {
-      fast_period: initialData?.config?.fast_period || 0,
-      slow_period: initialData?.config?.slow_period || 0,
-      position_size_pct: initialData?.config?.position_size_pct || 0,
+      fast_period: initialData?.config?.fast_period || 10,
+      slow_period: initialData?.config?.slow_period || 20,
+      position_size_pct: initialData?.config?.position_size_pct || 10,
       enable_long: initialData?.config?.enable_long ?? true,
       enable_short: initialData?.config?.enable_short ?? false,
       use_market_orders: initialData?.config?.use_market_orders ?? true,
       risk_settings: {
-        stop_loss_pct: initialData?.config?.risk_settings?.stop_loss_pct || 0,
-        take_profit_pct: initialData?.config?.risk_settings?.take_profit_pct || 0,
+        stop_loss_pct: initialData?.config?.risk_settings?.stop_loss_pct || 2.5,
+        take_profit_pct: initialData?.config?.risk_settings?.take_profit_pct || 5.0,
         max_position_pct: initialData?.config?.risk_settings?.max_position_pct || 100,
-        min_signal_interval: initialData?.config?.risk_settings?.min_signal_interval || 0,
+        min_signal_interval: initialData?.config?.risk_settings?.min_signal_interval || 60,
         trailing_stop: initialData?.config?.risk_settings?.trailing_stop ?? false,
-        trailing_stop_pct: initialData?.config?.risk_settings?.trailing_stop_pct || undefined
+        trailing_stop_pct: initialData?.config?.risk_settings?.trailing_stop_pct || 1.0
       },
       filters: {
         min_volume: initialData?.config?.filters?.min_volume || undefined,
@@ -94,7 +94,7 @@ export function SMAConfig({
         macd_signal: initialData?.config?.confirmation_indicators?.macd_signal || 9,
         use_volume: initialData?.config?.confirmation_indicators?.use_volume ?? false,
         volume_period: initialData?.config?.confirmation_indicators?.volume_period || 20,
-        min_volume_multiplier: initialData?.config?.confirmation_indicators?.min_volume_multiplier || 1
+        min_volume_multiplier: initialData?.config?.confirmation_indicators?.min_volume_multiplier || 1.5
       }
     },
     // Backtest Configuration
@@ -484,10 +484,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter stop loss percentage (e.g., 2.5)"
+                      placeholder="2.5"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">0 = disabled. Maximum loss before position is closed.</p>
+                    <p className="text-xs text-white/60">Maximum loss before position is closed (0.1 - 50%).</p>
                     {errors.stop_loss_pct && (
                       <p className="text-red-400 text-sm">{errors.stop_loss_pct}</p>
                     )}
@@ -511,10 +511,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter take profit percentage (e.g., 5.0)"
+                      placeholder="5.0"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">0 = disabled. Profit target before position is closed.</p>
+                    <p className="text-xs text-white/60">Profit target before position is closed (min 0.1%).</p>
                     {errors.take_profit_pct && (
                       <p className="text-red-400 text-sm">{errors.take_profit_pct}</p>
                     )}
@@ -539,10 +539,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter maximum position size (e.g., 100)"
+                      placeholder="100"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">Maximum percentage of portfolio that can be allocated to this strategy.</p>
+                    <p className="text-xs text-white/60">Maximum % of portfolio for this strategy (0.1 - 100%).</p>
                     {errors.max_position_pct && (
                       <p className="text-red-400 text-sm">{errors.max_position_pct}</p>
                     )}
@@ -565,10 +565,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter minimum minutes between signals (e.g., 60)"
+                      placeholder="60"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">0 = no limit. Prevents too frequent trading.</p>
+                    <p className="text-xs text-white/60">Minimum minutes between signals (0 = no limit).</p>
                   </div>
 
                   {/* Trailing Stop */}
@@ -611,10 +611,10 @@ export function SMAConfig({
                               }
                             }
                           })}
-                          placeholder="Enter trailing distance (e.g., 1.0)"
+                          placeholder="1.0"
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                         />
-                        <p className="text-xs text-white/60">Distance below peak price to trigger stop loss.</p>
+                        <p className="text-xs text-white/60">Distance below peak to trigger stop (0.1 - 10%).</p>
                       </div>
                     )}
                   </div>
@@ -646,10 +646,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter minimum volume (leave empty to disable)"
+                      placeholder="Optional"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">Only trade when volume exceeds this threshold.</p>
+                    <p className="text-xs text-white/60">Only trade when volume exceeds threshold (optional).</p>
                   </div>
 
                   {/* Spread Filter */}
@@ -671,10 +671,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter max spread percentage (e.g., 0.5)"
+                      placeholder="0.5"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">Skip trades when bid-ask spread is too wide.</p>
+                    <p className="text-xs text-white/60">Skip trades when spread exceeds this % (optional).</p>
                   </div>
 
                   {/* RSI Filters */}
@@ -696,10 +696,10 @@ export function SMAConfig({
                             }
                           }
                         })}
-                        placeholder="e.g., 70"
+                        placeholder="70"
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                       />
-                      <p className="text-xs text-white/60">Skip buy signals when RSI is above this level.</p>
+                      <p className="text-xs text-white/60">Skip buys when RSI above this (50-100, optional).</p>
                     </div>
 
                     <div className="space-y-3">
@@ -719,10 +719,10 @@ export function SMAConfig({
                             }
                           }
                         })}
-                        placeholder="e.g., 30"
+                        placeholder="30"
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                       />
-                      <p className="text-xs text-white/60">Skip sell signals when RSI is below this level.</p>
+                      <p className="text-xs text-white/60">Skip sells when RSI below this (0-50, optional).</p>
                     </div>
                   </div>
 
@@ -769,10 +769,10 @@ export function SMAConfig({
                           }
                         }
                       })}
-                      placeholder="Enter minimum spread percentage (e.g., 0.2)"
+                      placeholder="0.2"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
-                    <p className="text-xs text-white/60">Only trade when SMAs are sufficiently separated.</p>
+                    <p className="text-xs text-white/60">Only trade when SMAs separated by this % (optional).</p>
                   </div>
                 </div>
               </TabsContent>
@@ -824,10 +824,10 @@ export function SMAConfig({
                               }
                             }
                           })}
-                          placeholder="RSI period (e.g., 14)"
+                          placeholder="14"
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                         />
-                        <p className="text-xs text-white/60">Period for RSI calculation.</p>
+                        <p className="text-xs text-white/60">RSI calculation period (2-100).</p>
                       </div>
                     )}
                   </div>
@@ -872,7 +872,7 @@ export function SMAConfig({
                                 }
                               }
                             })}
-                            placeholder="Fast (e.g., 12)"
+                            placeholder="12"
                             className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                           />
                         </div>
@@ -882,17 +882,17 @@ export function SMAConfig({
                             min="5"
                             max="100"
                             value={formData.config.confirmation_indicators.macd_slow || ''}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
-                              config: { 
-                                ...formData.config, 
-                                confirmation_indicators: { 
-                                  ...formData.config.confirmation_indicators, 
-                                  macd_slow: parseInt(e.target.value) || 26 
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              config: {
+                                ...formData.config,
+                                confirmation_indicators: {
+                                  ...formData.config.confirmation_indicators,
+                                  macd_slow: parseInt(e.target.value) || 26
                                 }
                               }
                             })}
-                            placeholder="Slow (e.g., 26)"
+                            placeholder="26"
                             className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                           />
                         </div>
@@ -902,17 +902,17 @@ export function SMAConfig({
                             min="2"
                             max="50"
                             value={formData.config.confirmation_indicators.macd_signal || ''}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
-                              config: { 
-                                ...formData.config, 
-                                confirmation_indicators: { 
-                                  ...formData.config.confirmation_indicators, 
-                                  macd_signal: parseInt(e.target.value) || 9 
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              config: {
+                                ...formData.config,
+                                confirmation_indicators: {
+                                  ...formData.config.confirmation_indicators,
+                                  macd_signal: parseInt(e.target.value) || 9
                                 }
                               }
                             })}
-                            placeholder="Signal (e.g., 9)"
+                            placeholder="9"
                             className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                           />
                         </div>
@@ -960,7 +960,7 @@ export function SMAConfig({
                                 }
                               }
                             })}
-                            placeholder="Volume period (e.g., 20)"
+                            placeholder="20"
                             className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                           />
                         </div>
@@ -971,17 +971,17 @@ export function SMAConfig({
                             max="10"
                             step="0.1"
                             value={formData.config.confirmation_indicators.min_volume_multiplier || ''}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
-                              config: { 
-                                ...formData.config, 
-                                confirmation_indicators: { 
-                                  ...formData.config.confirmation_indicators, 
-                                  min_volume_multiplier: parseFloat(e.target.value) || 1 
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              config: {
+                                ...formData.config,
+                                confirmation_indicators: {
+                                  ...formData.config.confirmation_indicators,
+                                  min_volume_multiplier: parseFloat(e.target.value) || 1.5
                                 }
                               }
                             })}
-                            placeholder="Multiplier (e.g., 1.5)"
+                            placeholder="1.5"
                             className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                           />
                         </div>
