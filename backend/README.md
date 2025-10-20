@@ -1,6 +1,6 @@
-# E-Squared Backend
+# E² Backend
 
-A high-performance Rust backend built with Actix Web, featuring authentication and user profile management.
+A high-performance Rust backend built with Actix Web, featuring comprehensive trading strategy management, exchange integrations (CEX & DEX), and advanced backtesting capabilities.
 
 ## Features
 

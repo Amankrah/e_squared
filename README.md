@@ -1,10 +1,10 @@
-# E-Squared Trading Platform
+# E² Trading Platform
 
 <div align="center">
-  
-**🚀 A Modern Cryptocurrency Trading Strategy Builder**
 
-*Trade, Don't Gamble - Professional Crypto Trading Strategies Made Simple*
+**🚀 Professional Cryptocurrency Trading Strategy Platform**
+
+*Automated Trading Strategies for CEX & DEX - Built for Traders, By Traders*
 
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Next.js](https://img.shields.io/badge/Next-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -15,34 +15,64 @@
 
 ## 🎯 Overview
 
-E-Squared Trading is a comprehensive fullstack cryptocurrency trading platform that democratizes professional trading strategies. Built for beginners but powerful enough for experts, it features a lot of trading strategies including intelligent Dollar Cost Averaging (DCA) strategies that adapt to market conditions using sentiment analysis, volatility metrics, and advanced risk management.
+E² Trading is a comprehensive fullstack cryptocurrency trading platform that combines the power of centralized exchanges (CEX) and decentralized exchanges (DEX) with professional-grade automated trading strategies. Whether you're a beginner looking for simple DCA strategies or an advanced trader implementing complex grid trading and SMA crossover systems, E² provides the tools you need.
 
 ### ✨ Key Features
 
-- 🤖 **6 Intelligent DCA Strategies** - From ultra-conservative to aggressive momentum trading
-- 📊 **Real-time Market Analysis** - Fear & Greed index integration and volatility tracking  
-- 🔄 **Exchange Integration** - Seamless Binance connectivity with full trading capabilities
-- 🛡️ **Advanced Risk Management** - Stop losses, take profits, and position sizing
-- 📈 **Backtesting Engine** - Test strategies against historical data
-- 🎨 **Modern UI/UX** - Intuitive dashboard with dark mode support
-- 🔐 **Enterprise Security** - JWT authentication, encryption, and secure API handling
+#### 🤖 **Trading Strategies**
+- **Dollar Cost Averaging (DCA)** - 10+ preset strategies from conservative to aggressive
+  - RSI-based, Volatility-hunter, Dip-buyer, Dynamic multi-factor
+  - Weekend warrior, Business hours, Bear market hunter, and more
+- **Grid Trading** - Automated buy-low sell-high within price ranges
+- **SMA Crossover** - Moving average crossover signals with trend detection
+
+#### 🏦 **Exchange Integration**
+- **Centralized Exchanges (CEX)**
+  - Binance (Full support: Spot, Futures USDM)
+  - Coinbase, Kraken, Bybit, KuCoin, OKX (Coming soon)
+- **Decentralized Exchanges (DEX)**
+  - Ethereum: Uniswap V3
+  - BNB Chain: PancakeSwap V3
+  - Solana: Raydium & Jupiter aggregator
+
+#### 🔐 **Security & Wallet Management**
+- Non-custodial wallet connections with AES-256 encryption
+- Encrypted API key storage for exchanges
+- JWT authentication with bcrypt password hashing
+- 2FA support with TOTP
+- Session management with device tracking
+
+#### 📊 **Advanced Features**
+- **Backtesting Engine** - Test strategies against historical data
+- **Real-time Market Data** - DXY index, Bitcoin dominance, M2 money supply
+- **Technical Indicators** - SMA, EMA, RSI, MACD, Bollinger Bands, Stochastic
+- **Risk Management** - Stop loss, take profit, position sizing
+- **Portfolio Analytics** - Performance tracking and insights
+
+#### 🎨 **Modern UI/UX**
+- Intuitive dashboard with dark mode
+- Real-time strategy monitoring
+- Interactive charts with Recharts
+- Responsive design for all devices
 
 ## 🏗️ Architecture
 
 ### Backend (Rust)
-- **Framework**: Actix Web 4.4 with async/await
+- **Framework**: Actix Web 4.4 with async/await throughout
 - **Database**: SQLite with SeaORM for type-safe queries
-- **Authentication**: JWT tokens with bcrypt password hashing
-- **Exchange Integration**: Custom Binance SDK with rate limiting
-- **Strategy Engine**: Modular trading algorithms with backtesting
-- **Security**: HMAC signatures, request validation, CORS protection
+- **Authentication**: JWT tokens with HTTP-only cookies, bcrypt hashing
+- **Exchange Integration**:
+  - Modular connector system for CEX
+  - Production-ready DEX connectors (Uniswap, PancakeSwap, Raydium, Jupiter)
+- **Strategy Engine**: Extensible trait-based system with backtesting
+- **Security**: HMAC signatures, request validation, CORS protection, encrypted credentials
 
 ### Frontend (Next.js)
 - **Framework**: Next.js 15 with React 19 and TypeScript
 - **Styling**: Tailwind CSS 4 with Shadcn/ui components
-- **State Management**: React Context for authentication and app state
+- **State Management**: React Context for auth and app state
 - **Charts**: Recharts for performance visualization
-- **Theming**: Dark/light mode with system preference detection
+- **API Client**: Type-safe API client with automatic error handling
 
 ## 🎯 Trading Strategies
 
