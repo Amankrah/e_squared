@@ -130,6 +130,43 @@ export interface UpdateExchangeConnectionRequest {
   password: string
 }
 
+// Wallet Connection Types (for DEX trading with crypto wallets)
+export interface WalletConnection {
+  id: string
+  blockchain_network: string  // "ethereum", "bnbchain", "solana"
+  wallet_address: string
+  display_name: string
+  is_active: boolean
+  last_used?: string
+  connection_status: 'pending' | 'connected' | 'error'
+  last_error?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateWalletConnectionRequest {
+  blockchain_network: string  // "ethereum", "bnb", "bsc", "solana", "sol"
+  display_name: string
+  private_key: string  // User's wallet private key (will be encrypted)
+  password: string     // User's password for encryption
+}
+
+export interface UpdateWalletConnectionRequest {
+  display_name?: string
+  password: string  // User's password for verification
+}
+
+export interface WalletConnectionsResponse {
+  wallets: WalletConnection[]
+}
+
+export interface WalletBalanceResponse {
+  wallet_address: string
+  blockchain_network: string
+  balance: string
+  message?: string
+}
+
 // Removed WalletBalance interface - we only use live balance data from exchanges
 
 // New exchange account types based on modular connector
@@ -1209,6 +1246,42 @@ class ApiClient {
       connections: connectionsResponse.connections,
       live_balances: liveBalancesMap
     };
+  }
+
+  // Wallet Connection endpoints (for DEX trading)
+  async createWalletConnection(data: CreateWalletConnectionRequest): Promise<WalletConnection> {
+    return this.request<WalletConnection>('/wallets/connections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getWalletConnections(): Promise<WalletConnectionsResponse> {
+    return this.request<WalletConnectionsResponse>('/wallets/connections')
+  }
+
+  async getWalletConnection(connectionId: string): Promise<WalletConnection> {
+    return this.request<WalletConnection>(`/wallets/connections/${connectionId}`)
+  }
+
+  async updateWalletConnection(connectionId: string, data: UpdateWalletConnectionRequest): Promise<WalletConnection> {
+    return this.request<WalletConnection>(`/wallets/connections/${connectionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteWalletConnection(connectionId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/wallets/connections/${connectionId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getWalletBalance(connectionId: string, password: string): Promise<WalletBalanceResponse> {
+    return this.request<WalletBalanceResponse>(`/wallets/connections/${connectionId}/balance`, {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    })
   }
 
   // Strategy endpoints - Unified approach

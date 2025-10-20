@@ -7,6 +7,7 @@ mod routes;
 mod services;
 mod utils;
 mod exchange_connectors;
+mod dex_connectors;
 mod backtesting;
 mod strategies;
 

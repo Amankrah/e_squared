@@ -5,7 +5,7 @@ use serde_json::json;
 use crate::middleware::auth::AuthMiddleware;
 
 use crate::handlers::{
-    auth, user_profile, two_factor, session_management, exchange_management,
+    auth, user_profile, two_factor, session_management, exchange_management, wallet_management,
     dca_strategy_management, sma_crossover_strategy_management,
     grid_trading_strategy_management, strategy_summary, market_data,
 };
@@ -19,6 +19,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_2fa_routes)
             .configure(configure_session_routes)
             .configure(configure_exchange_routes)
+            .configure(configure_wallet_routes)
             .configure(configure_dca_routes)
             .configure(configure_sma_crossover_routes)
             .configure(configure_grid_trading_routes)
@@ -234,4 +235,19 @@ fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
             .route("/btc-price", web::get().to(market_data::get_btc_price))
             .route("/fear-greed", web::get().to(market_data::get_fear_greed_index))
     );
+}
+
+/// Configure wallet connection routes
+fn configure_wallet_routes(cfg: &mut web::ServiceConfig) {
+    tracing::info!("Configuring wallet routes...");
+    cfg.service(
+        web::scope("/wallets")
+            .route("/connections", web::post().to(wallet_management::create_wallet_connection))
+            .route("/connections", web::get().to(wallet_management::get_wallet_connections))
+            .route("/connections/{connection_id}", web::get().to(wallet_management::get_wallet_connection))
+            .route("/connections/{connection_id}", web::put().to(wallet_management::update_wallet_connection))
+            .route("/connections/{connection_id}", web::delete().to(wallet_management::delete_wallet_connection))
+            .route("/connections/{connection_id}/balance", web::post().to(wallet_management::get_wallet_balance))
+    );
+    tracing::info!("Wallet routes configured");
 }

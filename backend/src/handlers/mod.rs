@@ -3,6 +3,7 @@ pub mod user_profile;
 pub mod two_factor;
 pub mod session_management;
 pub mod exchange_management;
+pub mod wallet_management;
 pub mod dca_strategy_management;
 pub mod sma_crossover_strategy_management;
 pub mod grid_trading_strategy_management;

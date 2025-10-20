@@ -16,7 +16,8 @@ import {
   Cog,
   Home,
   LineChart,
-  TestTube
+  TestTube,
+  Wallet
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -75,6 +76,15 @@ export function DashboardSidebar({ isOpen, onClose }: DashboardSidebarProps) {
       color: "hover:bg-gradient-to-r hover:from-blue-500/20 hover:to-cyan-500/20",
       activeColor: "bg-gradient-to-r from-blue-600/90 to-cyan-600/90",
       iconColor: "text-blue-300"
+    },
+    {
+      href: "/dashboard/wallets",
+      icon: Wallet,
+      label: "Crypto Wallets",
+      description: "DEX trading",
+      color: "hover:bg-gradient-to-r hover:from-indigo-500/20 hover:to-purple-500/20",
+      activeColor: "bg-gradient-to-r from-indigo-600/90 to-purple-600/90",
+      iconColor: "text-indigo-300"
     },
     {
       href: "/dashboard/portfolio",
