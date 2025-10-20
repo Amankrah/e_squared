@@ -11,6 +11,27 @@
 [![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
+---
+
+### ⚖️ PROPRIETARY SOFTWARE NOTICE
+
+**This software is proprietary and confidential.**
+
+© 2024-2025 E² Trading Platform. All Rights Reserved.
+
+This software and its associated documentation are proprietary to E² Trading Platform. Unauthorized copying, modification, distribution, or use of this software, via any medium, is strictly prohibited without explicit written permission from the copyright holder.
+
+**Restrictions:**
+- ❌ No copying, reproduction, or replication
+- ❌ No modification or derivative works
+- ❌ No distribution, sublicensing, or transfer
+- ❌ No reverse engineering or decompilation
+- ❌ No commercial use without licensing agreement
+
+For licensing inquiries, contact: **licensing@esquaredtrading.com**
+
+---
+
 </div>
 
 ## 🎯 Overview
@@ -76,48 +97,80 @@ E² Trading is a comprehensive fullstack cryptocurrency trading platform that co
 
 ## 🎯 Trading Strategies
 
-### 1. **Ultra Conservative DCA** 
-*Perfect for beginners and risk-averse investors*
-- 📅 **Frequency**: Bi-weekly investments
-- 💰 **Risk Level**: Very Low
-- 🎯 **Allocation**: $50 - $5,000
-- 🛡️ **Protection**: 15% stop loss, 50% take profit
+### 1. **Dollar Cost Averaging (DCA)**
 
-### 2. **Conservative Steady DCA**
-*Simple and predictable for long-term holders*
-- 📅 **Frequency**: Weekly investments  
-- 💰 **Risk Level**: Low
-- 🎯 **Allocation**: $100 - $10,000
-- 🛡️ **Protection**: 20% stop loss, no take profit
+#### Conservative Presets:
+- **Conservative** - Simple weekly purchases with basic frequency settings
+- **Micro DCA** - High-frequency small daily purchases
+- **Weekend Warrior** - Weekend-only execution for reduced market hours exposure
+- **Business Hours** - Trades only during specified market hours (9 AM - 4 PM UTC, Mon-Fri)
 
-### 3. **Adaptive Zone DCA** ⭐ *Flagship Strategy*
-*Smart adaptation to market conditions*
-- 📅 **Frequency**: Daily analysis with dynamic execution
-- 💰 **Risk Level**: Moderate
-- 🎯 **Allocation**: $500 - $50,000
-- 🧠 **Intelligence**: Fear & Greed index + volatility adjustments
-- 🛡️ **Protection**: 15% stop loss, 100% take profit
+#### Advanced Presets:
+- **Aggressive RSI** - RSI-based execution with 3x multiplier when oversold (<25 RSI), 0.2x when overbought (>75 RSI)
+- **Volatility Hunter** - Dynamically adjusts purchase amounts based on market volatility:
+  - 2x multiplier during high volatility (>25%)
+  - 0.7x multiplier during low volatility (<5%)
+- **Dip Buyer** - Multi-tier dip buying system with automatic triggers:
+  - 5% price drop: 1.5x base amount (max 5 triggers)
+  - 10% price drop: 2.5x base amount (max 3 triggers)
+  - 20% price drop: 5x base amount (max 2 triggers)
+  - 30% price drop: 10x base amount (max 1 trigger)
+- **Balanced Dynamic** - Multi-factor strategy combining:
+  - RSI indicator (40% weight)
+  - Volatility metrics (30% weight)
+  - Market sentiment (20% weight)
+  - Trend analysis (10% weight)
+  - Max multiplier: 3x, Min multiplier: 0.3x
+- **Bear Market Hunter** - Increased accumulation during downtrends with configurable thresholds
+- **Risk Managed** - Includes strict position limits, max/min purchase amounts, and volatility pause mechanisms
 
-### 4. **Aggressive Momentum DCA**
-*High-frequency trading for active investors*
-- 📅 **Frequency**: Every 4 hours
-- 💰 **Risk Level**: High  
-- 🎯 **Allocation**: $1,000 - $100,000
-- ⚡ **Features**: Large position sizes, quick profit taking
+**Use Cases**: Automated accumulation strategies, market condition adaptation, systematic portfolio building
 
-### 5. **Bear Market Accumulator**
-*Specialized for downtrends and market crashes*
-- 📅 **Frequency**: Every 3 days
-- 💰 **Risk Level**: Moderate
-- 🎯 **Focus**: Maximum accumulation during fear
-- 📊 **Historical**: 85% returns during 2022 bear market
+### 2. **Grid Trading Strategy**
 
-### 6. **Bull Market Rider** 
-*Optimized for uptrends with profit protection*
-- 📅 **Frequency**: Every 2 days
-- 💰 **Risk Level**: Moderate
-- 🎯 **Focus**: Momentum capture with greed avoidance
-- 📊 **Historical**: 55% annualized returns in bull markets
+Automated buy-low, sell-high execution within defined price ranges.
+
+**Configuration Options:**
+- **Grid Types**: Arithmetic (linear spacing) or Geometric (percentage-based spacing)
+- **Price Bounds**: User-defined upper and lower price limits
+- **Grid Levels**: Customizable number of grid lines (buy/sell levels)
+- **Order Sizing**: Equal or custom sizing per grid level
+- **Risk Controls**: Maximum open positions, stop-loss levels, position limits
+
+**Grid Mechanics:**
+- Places buy orders at lower grid levels
+- Places sell orders at higher grid levels
+- Automatically captures profit on each completed grid cycle
+- Rebalances grid positions based on price movement
+
+**Use Cases**: Range-bound markets, sideways consolidation, automated market making, scalping
+
+### 3. **SMA Crossover Strategy**
+
+Moving average crossover strategy with trend confirmation and dynamic positioning.
+
+**Configuration Options:**
+- **Fast SMA Period**: Shorter moving average (e.g., 20, 50)
+- **Slow SMA Period**: Longer moving average (e.g., 50, 200)
+- **Trend Filter**: Optional long-term SMA for trend confirmation (e.g., 200)
+- **Position Sizing**: Configurable base position size with dynamic adjustments
+- **Exit Rules**: Crossover reversal, time-based, or profit target
+
+**Signal Types:**
+- **Golden Cross**: Fast SMA crosses above Slow SMA (bullish signal)
+- **Death Cross**: Fast SMA crosses below Slow SMA (bearish signal)
+
+**Features:**
+- Trend strength calculation
+- Signal confirmation with volume/momentum
+- Dynamic position sizing based on signal strength
+- Multiple exit strategies
+
+**Use Cases**: Trend following, swing trading, automated entry/exit, momentum trading
+
+---
+
+**⚠️ Important Notice**: These strategies are for educational and automation purposes. Past performance does not indicate future results. Users should conduct their own research and testing before deployment.
 
 ## 🚀 Quick Start
 
@@ -291,40 +344,64 @@ npm start
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+**This is proprietary software.** Contributions are not accepted from external parties. This codebase is closed-source and maintained exclusively by E² Trading Platform.
 
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+For employment or partnership opportunities, contact: **careers@esquaredtrading.com**
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**PROPRIETARY LICENSE**
+
+This software is proprietary and confidential. All rights are reserved by E² Trading Platform.
+
+**Copyright © 2024-2025 E² Trading Platform. All Rights Reserved.**
+
+This software may not be used, copied, modified, or distributed without explicit written permission. See the full proprietary license terms in the header of this document.
+
+## ⚠️ Disclaimer
+
+**IMPORTANT - PLEASE READ CAREFULLY**
+
+This software is provided for educational and informational purposes only. E² Trading Platform:
+
+- **Not Financial Advice**: This platform and its strategies do not constitute financial, investment, trading, or any other type of advice
+- **No Guarantees**: Past performance of strategies does not guarantee future results
+- **Risk Warning**: Cryptocurrency trading carries substantial risk of loss. You may lose your entire investment
+- **User Responsibility**: Users are solely responsible for their own trading decisions and outcomes
+- **No Liability**: E² Trading Platform assumes no liability for any losses incurred through use of this software
+- **Regulatory Compliance**: Users must ensure compliance with their local laws and regulations
+- **Due Diligence**: Users should conduct their own research and consult with qualified financial advisors
+
+**By using this software, you acknowledge and accept all risks associated with cryptocurrency trading.**
 
 ## 🙏 Acknowledgments
 
-- **Binance API** - Exchange connectivity
+This platform leverages industry-standard technologies:
+
+- **Binance API** - CEX connectivity
+- **Uniswap V3** - Ethereum DEX integration
+- **PancakeSwap V3** - BNB Chain DEX integration
+- **Raydium & Jupiter** - Solana DEX integrations
 - **Actix Web** - High-performance Rust web framework
 - **Next.js** - React framework for production
-- **Shadcn/ui** - Beautiful UI components
+- **Shadcn/ui** - UI component library
 - **SeaORM** - Type-safe database operations
 
 ## 📞 Support
 
-- **Documentation**: [docs/](./docs/)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/e-squared-trading/issues)
-- **X**: [Join our community](https://x.com/esquaredtrading)
-- **Email**: contact@esquaredtradings.com
+- **Business Inquiries**: contact@esquaredtrading.com
+- **Technical Support**: support@esquaredtrading.com
+- **Licensing**: licensing@esquaredtrading.com
+- **Careers**: careers@esquaredtrading.com
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for the crypto community**
+**E² Trading Platform** - Professional Cryptocurrency Trading Automation
 
-⭐ Star us on GitHub if you find this project useful!
+**Copyright © 2024-2025 E² Trading Platform. All Rights Reserved.**
+
+*This is proprietary software. Unauthorized use is prohibited.*
 
 </div>

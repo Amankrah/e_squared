@@ -1,6 +1,16 @@
 # E² Backend
 
+**PROPRIETARY SOFTWARE - © 2024-2025 E² Trading Platform. All Rights Reserved.**
+
+*Unauthorized copying, modification, or distribution is strictly prohibited.*
+
+---
+
 A high-performance Rust backend built with Actix Web, featuring comprehensive trading strategy management, exchange integrations (CEX & DEX), and advanced backtesting capabilities.
+
+## ⚠️ Disclaimer
+
+This software is for educational purposes only and does not constitute financial advice. Cryptocurrency trading carries substantial risk. Users are solely responsible for their trading decisions.
 
 ## Features
 
