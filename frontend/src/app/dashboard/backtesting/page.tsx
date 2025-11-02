@@ -217,6 +217,7 @@ export default function BacktestingPage() {
       end_date: string
       interval: string
       initial_capital: number
+      asset_type?: 'crypto' | 'stock'
     }
   ) => {
     setCustomDCAConfig(config)
@@ -230,7 +231,8 @@ export default function BacktestingPage() {
         end_date: backtestParams.end_date,
         initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: backtestParams.interval
+        interval: backtestParams.interval,
+        asset_type: backtestParams.asset_type || 'crypto'
       }
       await handleRunBacktest(request)
     } catch (error) {
@@ -248,6 +250,7 @@ export default function BacktestingPage() {
       end_date: string
       interval: string
       initial_capital: number
+      asset_type?: 'crypto' | 'stock'
     }
   ) => {
     setCustomGridConfig(config)
@@ -261,7 +264,8 @@ export default function BacktestingPage() {
         end_date: backtestParams.end_date,
         initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: backtestParams.interval
+        interval: backtestParams.interval,
+        asset_type: backtestParams.asset_type || 'crypto'
       }
       await handleRunBacktest(request)
     } catch (error) {
@@ -279,6 +283,7 @@ export default function BacktestingPage() {
       end_date: string
       interval: string
       initial_capital: number
+      asset_type?: 'crypto' | 'stock'
     }
   ) => {
     setCustomSMAConfig(config)
@@ -292,7 +297,8 @@ export default function BacktestingPage() {
         end_date: backtestParams.end_date,
         initial_capital: backtestParams.initial_capital,
         config: config,
-        interval: backtestParams.interval
+        interval: backtestParams.interval,
+        asset_type: backtestParams.asset_type || 'crypto'
       }
       await handleRunBacktest(request)
     } catch (error) {

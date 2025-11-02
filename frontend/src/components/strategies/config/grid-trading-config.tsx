@@ -39,6 +39,7 @@ interface GridTradingConfigProps {
       end_date: string
       interval: string
       initial_capital: number
+      asset_type?: 'crypto' | 'stock'
     }
   ) => void
   isLoading?: boolean
@@ -58,6 +59,7 @@ export function GridTradingConfig({
     backtest_end_date?: string
     backtest_interval?: '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w'
     backtest_initial_capital?: number
+    asset_type?: 'crypto' | 'stock'
   }>({
     name: initialData?.name || '',
     asset_symbol: initialData?.asset_symbol || '',
@@ -73,7 +75,8 @@ export function GridTradingConfig({
     backtest_start_date: new Date(Date.now() - 335 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     backtest_end_date: new Date().toISOString().split('T')[0],
     backtest_interval: '1d',
-    backtest_initial_capital: 10000
+    backtest_initial_capital: 10000,
+    asset_type: 'crypto'
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -290,12 +293,44 @@ export function GridTradingConfig({
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="asset_type" className="text-white/80 font-medium">Asset Type</Label>
+                <Select
+                  value={formData.asset_type || 'crypto'}
+                  onValueChange={(value: 'crypto' | 'stock') => setFormData({ ...formData, asset_type: value })}
+                >
+                  <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/15 transition-colors">
+                    <SelectValue placeholder="Select asset type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/20">
+                    <SelectItem value="crypto" className="text-white hover:bg-white/10 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className="text-orange-400">₿</span>
+                        <span>Cryptocurrency</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="stock" className="text-white hover:bg-white/10 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-400">📈</span>
+                        <span>Stock Market</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {formData.asset_type === 'stock' && (
+                  <p className="text-amber-400/80 text-xs flex items-center gap-1">
+                    <span>ℹ️</span>
+                    <span>Stocks support daily intervals only (1d, 1w, 1M)</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="asset_symbol" className="text-white/80">Asset Symbol</Label>
                 <Input
                   id="asset_symbol"
                   value={formData.asset_symbol}
                   onChange={(e) => setFormData({ ...formData, asset_symbol: e.target.value.toUpperCase() })}
-                  placeholder="BTC"
+                  placeholder={formData.asset_type === 'stock' ? 'AAPL' : 'BTC'}
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                 />
                 {errors.asset_symbol && (
@@ -677,7 +712,8 @@ export function GridTradingConfig({
                       start_date: formData.backtest_start_date || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                       end_date: formData.backtest_end_date || new Date().toISOString().split('T')[0],
                       interval: formData.backtest_interval || '1d',
-                      initial_capital: formData.backtest_initial_capital || 10000
+                      initial_capital: formData.backtest_initial_capital || 10000,
+                      asset_type: formData.asset_type || 'crypto'
                     }
                     onBacktest(formData.config, formData.name, formData.asset_symbol, backtestParams)
                   }}

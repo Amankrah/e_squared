@@ -9,6 +9,7 @@ pub struct Config {
     pub server_host: String,
     pub server_port: u16,
     pub cors_origin: String,
+    pub alpha_vantage_api_key: String,
 }
 
 impl Config {
@@ -36,12 +37,17 @@ impl Config {
             .or_else(|_| env::var("cors_origin"))
             .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
+        let alpha_vantage_api_key = env::var("ALPHA_VANTAGE_API_KEY")
+            .or_else(|_| env::var("alpha_vantage_api_key"))
+            .context("ALPHA_VANTAGE_API_KEY environment variable is required")?;
+
         Ok(Config {
             database_url,
             jwt_secret,
             server_host,
             server_port,
             cors_origin,
+            alpha_vantage_api_key,
         })
     }
 

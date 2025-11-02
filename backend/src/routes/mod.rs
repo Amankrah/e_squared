@@ -7,7 +7,7 @@ use crate::middleware::auth::AuthMiddleware;
 use crate::handlers::{
     auth, user_profile, two_factor, session_management, exchange_management, wallet_management,
     dca_strategy_management, sma_crossover_strategy_management,
-    grid_trading_strategy_management, strategy_summary, market_data,
+    grid_trading_strategy_management, strategy_summary, market_data, stock_data,
 };
 
 /// Configure all application routes
@@ -26,6 +26,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .configure(configure_exchange_connector_routes)
             .configure(configure_backtesting_routes)
             .configure(configure_market_data_routes)
+            .configure(configure_stock_data_routes)
             .configure(configure_public_routes)
     )
     .route("/health", web::get().to(health_check));
@@ -234,6 +235,15 @@ fn configure_market_data_routes(cfg: &mut web::ServiceConfig) {
             .route("/m2", web::get().to(market_data::get_m2))
             .route("/btc-price", web::get().to(market_data::get_btc_price))
             .route("/fear-greed", web::get().to(market_data::get_fear_greed_index))
+    );
+}
+
+/// Configure stock data routes
+fn configure_stock_data_routes(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/stocks")
+            .route("/{symbol}/price", web::get().to(stock_data::get_stock_price))
+            .route("/{symbol}/historical", web::get().to(stock_data::get_stock_historical))
     );
 }
 

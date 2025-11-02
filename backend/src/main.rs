@@ -23,7 +23,7 @@ use config::Config;
 use handlers::AuthService;
 use middleware::{SessionTrackingMiddleware, auth::AuthMiddleware};
 use routes::configure_routes;
-use services::{MarketDataService, DCAExecutionEngine, DxyService, MarketIndicatorsService};
+use services::{MarketDataService, DCAExecutionEngine, DxyService, MarketIndicatorsService, StockDataService};
 use utils::encryption::EncryptionService;
 
 /// Initialize application services
@@ -34,6 +34,7 @@ struct AppServices {
     execution_engine: DCAExecutionEngine,
     dxy_service: DxyService,
     market_indicators: MarketIndicatorsService,
+    stock_service: StockDataService,
 }
 
 impl AppServices {
@@ -68,6 +69,9 @@ impl AppServices {
         // Initialize Market Indicators service
         let market_indicators = MarketIndicatorsService::default();
 
+        // Initialize Stock Data service
+        let stock_service = StockDataService::new(config.alpha_vantage_api_key.clone());
+
         Ok(Self {
             database,
             auth_service,
@@ -75,6 +79,7 @@ impl AppServices {
             execution_engine,
             dxy_service,
             market_indicators,
+            stock_service,
         })
     }
 
@@ -141,6 +146,7 @@ fn create_server(
         let execution_engine = services.execution_engine.clone();
         let dxy_service = services.dxy_service.clone();
         let market_indicators = services.market_indicators.clone();
+        let stock_service = services.stock_service.clone();
         // Legacy strategy_template_service removed
         let secret_key = secret_key.clone();
         let cors_origin = config.cors_origin.clone();
@@ -170,6 +176,7 @@ fn create_server(
             .app_data(web::Data::new(execution_engine.clone()))
             .app_data(web::Data::new(dxy_service.clone()))
             .app_data(web::Data::new(market_indicators.clone()))
+            .app_data(web::Data::new(stock_service.clone()))
             // Custom JSON error handler for better error logging
             .app_data(
                 web::JsonConfig::default()

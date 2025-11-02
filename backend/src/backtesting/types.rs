@@ -20,6 +20,13 @@ pub struct BacktestConfig {
     /// When true, capital is "injected" for each buy, simulating ongoing income
     #[serde(default)]
     pub unlimited_capital: bool,
+    /// Asset type: "crypto" or "stock"
+    #[serde(default = "default_asset_type")]
+    pub asset_type: String,
+}
+
+fn default_asset_type() -> String {
+    "crypto".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,4 +198,7 @@ pub struct BacktestRequest {
     pub strategy_parameters: Option<serde_json::Value>,
     pub stop_loss_percentage: Option<Decimal>,
     pub take_profit_percentage: Option<Decimal>,
+    /// Asset type: "crypto" or "stock" (defaults to "crypto")
+    #[serde(default = "default_asset_type")]
+    pub asset_type: String,
 }

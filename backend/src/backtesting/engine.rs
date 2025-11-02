@@ -8,6 +8,7 @@ use chrono::Utc;
 use crate::backtesting::types::*;
 use std::collections::VecDeque;
 use crate::backtesting::binance_fetcher::BinanceFetcher;
+use crate::backtesting::stock_fetcher::StockFetcher;
 use crate::strategies::{Strategy, create_strategy, StrategySignal, StrategySignalType, QuantityType, StrategyMode, StrategyContext, MarketData};
 use crate::strategies::core::traits::{OrderUpdate, OrderStatus, OrderType as TraitsOrderType};
 use crate::exchange_connectors::{Kline};
@@ -15,14 +16,24 @@ use crate::utils::errors::AppError;
 
 /// Backtesting engine with integrated caching and optimization
 pub struct BacktestEngine {
-    data_fetcher: Arc<BinanceFetcher>,
+    binance_fetcher: Arc<BinanceFetcher>,
+    stock_fetcher: Option<Arc<StockFetcher>>,
 }
 
 impl BacktestEngine {
     /// Create a new backtest engine
     pub fn new() -> Self {
         Self {
-            data_fetcher: Arc::new(BinanceFetcher::new()),
+            binance_fetcher: Arc::new(BinanceFetcher::new()),
+            stock_fetcher: None,
+        }
+    }
+
+    /// Create a new backtest engine with stock support
+    pub fn new_with_stock_support(alpha_vantage_api_key: String) -> Self {
+        Self {
+            binance_fetcher: Arc::new(BinanceFetcher::new()),
+            stock_fetcher: Some(Arc::new(StockFetcher::new(alpha_vantage_api_key))),
         }
     }
 
@@ -44,16 +55,27 @@ impl BacktestEngine {
         // Create strategy instance
         let mut strategy = create_strategy(&config.strategy_name)?;
 
-        // Fetch historical data (will use cache if available)
-        let historical_data = self
-            .data_fetcher
-            .fetch_klines(
-                &config.symbol,
-                &config.interval,
-                config.start_time,
-                config.end_time,
-            )
-            .await?;
+        // Fetch historical data based on asset type
+        let historical_data = match config.asset_type.as_str() {
+            "stock" => {
+                let fetcher = self.stock_fetcher.as_ref()
+                    .ok_or_else(|| AppError::InternalServerError)?;
+                fetcher.fetch_klines(
+                    &config.symbol,
+                    &config.interval,
+                    config.start_time,
+                    config.end_time,
+                ).await?
+            }
+            "crypto" | _ => {
+                self.binance_fetcher.fetch_klines(
+                    &config.symbol,
+                    &config.interval,
+                    config.start_time,
+                    config.end_time,
+                ).await?
+            }
+        };
 
         if historical_data.is_empty() {
             return Err(AppError::BadRequest(

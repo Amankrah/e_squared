@@ -655,6 +655,7 @@ export interface BacktestRequest {
   initial_capital: number
   config: StrategyConfig
   interval?: string
+  asset_type?: 'crypto' | 'stock'  // New field for asset type
 }
 
 // Backend-compatible backtest request
@@ -665,9 +666,10 @@ export interface BackendBacktestRequest {
   end_date: string
   initial_balance: number
   strategy_name: string
-  strategy_parameters?: Record<string, any>
+  strategy_parameters?: Record<string, unknown>
   stop_loss_percentage?: number
   take_profit_percentage?: number
+  asset_type?: 'crypto' | 'stock'  // New field for asset type
 }
 
 // Database backtest result model (from history endpoint)
@@ -715,7 +717,7 @@ export interface OpenPosition {
 // Backtest engine result (from run backtest endpoint)
 export interface BacktestEngineResult {
   backtest_id: string
-  config: Record<string, any>
+  config: Record<string, unknown>
   trades: BacktestTrade[]
   metrics: BacktestEngineMetrics
   performance_chart: PerformancePoint[]
@@ -752,10 +754,10 @@ export interface PerformancePoint {
 }
 
 export interface BacktestResultDetail extends BacktestResult {
-  strategy_parameters: Record<string, any>
-  trades_data: Record<string, any>
-  equity_curve: Record<string, any>
-  drawdown_curve: Record<string, any>
+  strategy_parameters: Record<string, unknown>
+  trades_data: Record<string, unknown>
+  equity_curve: Record<string, unknown>
+  drawdown_curve: Record<string, unknown>
 }
 
 export interface BacktestListResponse {
@@ -893,8 +895,8 @@ export interface UserProfile {
 
 
 export interface BacktestResults {
-  config: Record<string, any>
-  executions: Record<string, any>[]
+  config: Record<string, unknown>
+  executions: Record<string, unknown>[]
   performance_metrics: {
     total_return: string
     total_return_percentage: string
@@ -917,7 +919,7 @@ export interface BacktestResults {
 }
 
 export interface TemplateComparison {
-  request: Record<string, any>
+  request: Record<string, unknown>
   results: {
     template_id: string
     template_name: string
@@ -1325,7 +1327,7 @@ class ApiClient {
     const transformedData = {
       name: data.name,
       asset_symbol: data.asset_symbol,
-      config: this.transformGridTradingConfig(data.config)
+      config: this.transformGridTradingConfig(data.config as unknown as Record<string, unknown>) as unknown as Record<string, unknown>
     }
 
     return this.request<GridTradingStrategy>('/grid-trading/strategies', {
@@ -1455,22 +1457,28 @@ class ApiClient {
   }
 
   // Configuration transformation helpers
-  private transformDCAConfig(config: Record<string, any>): DCAConfig {
+  private transformDCAConfig(config: Record<string, unknown>): DCAConfig {
+    // Type guard helpers
+    const asNumber = (val: unknown): number => typeof val === 'number' ? val : 0
+    const asString = (val: unknown): string => typeof val === 'string' ? val : ''
+    const asBoolean = (val: unknown): boolean => Boolean(val)
+
     // Handle different frequency formats
     let frequency: DCAFrequency
     if (config.frequency) {
       // Already in correct format
-      frequency = config.frequency
+      frequency = config.frequency as DCAFrequency
     } else if (config.dca_interval_hours) {
       // Old format - convert to new format
-      if (config.dca_interval_hours === 24) {
+      const hours = asNumber(config.dca_interval_hours)
+      if (hours === 24) {
         frequency = { Daily: 1 }
-      } else if (config.dca_interval_hours === 168) {
+      } else if (hours === 168) {
         frequency = { Weekly: 1 }
-      } else if (config.dca_interval_hours < 24) {
-        frequency = { Hourly: config.dca_interval_hours }
+      } else if (hours < 24) {
+        frequency = { Hourly: hours }
       } else {
-        frequency = { Custom: config.dca_interval_hours * 60 } // Convert to minutes
+        frequency = { Custom: hours * 60 } // Convert to minutes
       }
     } else {
       frequency = { Daily: 1 } // Default
@@ -1512,79 +1520,79 @@ class ApiClient {
 
     // Create backend-compatible DCA config
     const dcaConfig: DCAConfig = {
-      base_amount: config.base_amount || config.total_allocation || 1000,
+      base_amount: asNumber(config.base_amount || config.total_allocation) || 1000,
       frequency,
       strategy_type: strategyType,
-      pause_on_high_volatility: config.pause_on_high_volatility || false,
-      pause_on_bear_market: config.pause_on_bear_market || false,
+      pause_on_high_volatility: asBoolean(config.pause_on_high_volatility),
+      pause_on_bear_market: asBoolean(config.pause_on_bear_market),
       filters: {
-        allowed_hours: config.allowed_hours,
-        allowed_weekdays: config.allowed_weekdays,
-        min_interval_minutes: config.min_interval_minutes,
-        max_executions_per_day: config.max_executions_per_day,
-        min_volume_threshold: config.min_volume_threshold,
-        max_spread_percentage: config.max_spread_percentage,
-        max_price_deviation_percentage: config.max_price_deviation_percentage
+        allowed_hours: config.allowed_hours as number[] | undefined,
+        allowed_weekdays: config.allowed_weekdays as number[] | undefined,
+        min_interval_minutes: config.min_interval_minutes as number | undefined,
+        max_executions_per_day: config.max_executions_per_day as number | undefined,
+        min_volume_threshold: config.min_volume_threshold as number | undefined,
+        max_spread_percentage: config.max_spread_percentage as number | undefined,
+        max_price_deviation_percentage: config.max_price_deviation_percentage as number | undefined
       }
     }
 
     // Add optional configurations based on strategy type and frontend config
     // Use existing config if already in correct format, otherwise build from old format
     if (config.sentiment_config) {
-      dcaConfig.sentiment_config = config.sentiment_config
+      dcaConfig.sentiment_config = config.sentiment_config as SentimentConfig
     } else if (config.sentiment_multiplier || config.fear_greed_threshold_buy || config.fear_greed_threshold_sell) {
       dcaConfig.sentiment_config = {
-        fear_greed_threshold: config.fear_greed_threshold_buy,
-        bearish_multiplier: config.fear_multiplier || 1.5,
-        bullish_multiplier: config.greed_multiplier || 0.7
+        fear_greed_threshold: config.fear_greed_threshold_buy as number | undefined,
+        bearish_multiplier: asNumber(config.fear_multiplier) || 1.5,
+        bullish_multiplier: asNumber(config.greed_multiplier) || 0.7
       }
     }
 
     if (config.volatility_config) {
-      dcaConfig.volatility_config = config.volatility_config
-      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold
+      dcaConfig.volatility_config = config.volatility_config as VolatilityConfig
+      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold as number | undefined
     } else if (config.volatility_adjustment || strategyType === 'VolatilityBased' || strategyType === 'Dynamic') {
       dcaConfig.volatility_config = {
-        period: config.volatility_period || 20,
-        low_threshold: config.volatility_low_threshold || 10,
-        high_threshold: config.volatility_high_threshold || 30,
-        low_volatility_multiplier: config.low_volatility_multiplier || 0.8,
-        high_volatility_multiplier: config.high_volatility_multiplier || 1.5,
+        period: asNumber(config.volatility_period) || 20,
+        low_threshold: asNumber(config.volatility_low_threshold) || 10,
+        high_threshold: asNumber(config.volatility_high_threshold) || 30,
+        low_volatility_multiplier: asNumber(config.low_volatility_multiplier) || 0.8,
+        high_volatility_multiplier: asNumber(config.high_volatility_multiplier) || 1.5,
         normal_multiplier: 1.0
       }
-      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold
+      dcaConfig.volatility_pause_threshold = config.volatility_pause_threshold as number | undefined
     }
 
     if (config.rsi_config) {
-      dcaConfig.rsi_config = config.rsi_config
+      dcaConfig.rsi_config = config.rsi_config as DCARSIConfig
     } else if (strategyType === 'RSIBased' || strategyType === 'Dynamic') {
       dcaConfig.rsi_config = {
-        period: config.rsi_period || 14,
-        oversold_threshold: config.rsi_oversold || 30,
-        overbought_threshold: config.rsi_overbought || 70,
-        oversold_multiplier: config.rsi_oversold_multiplier || 2.0,
-        overbought_multiplier: config.rsi_overbought_multiplier || 0.5,
+        period: asNumber(config.rsi_period) || 14,
+        oversold_threshold: asNumber(config.rsi_oversold) || 30,
+        overbought_threshold: asNumber(config.rsi_overbought) || 70,
+        oversold_multiplier: asNumber(config.rsi_oversold_multiplier) || 2.0,
+        overbought_multiplier: asNumber(config.rsi_overbought_multiplier) || 0.5,
         normal_multiplier: 1.0
-      } as DCARSIConfig
+      }
     }
 
     if (config.dynamic_factors) {
-      dcaConfig.dynamic_factors = config.dynamic_factors
+      dcaConfig.dynamic_factors = config.dynamic_factors as DynamicFactors
     } else if (strategyType === 'Dynamic') {
       dcaConfig.dynamic_factors = {
-        rsi_weight: config.rsi_weight || 0.3,
-        volatility_weight: config.volatility_weight || 0.3,
-        sentiment_weight: config.sentiment_weight || 0.2,
-        trend_weight: config.trend_weight || 0.2,
-        max_multiplier: config.max_multiplier || 3.0,
-        min_multiplier: config.min_multiplier || 0.3
+        rsi_weight: asNumber(config.rsi_weight) || 0.3,
+        volatility_weight: asNumber(config.volatility_weight) || 0.3,
+        sentiment_weight: asNumber(config.sentiment_weight) || 0.2,
+        trend_weight: asNumber(config.trend_weight) || 0.2,
+        max_multiplier: asNumber(config.max_multiplier) || 3.0,
+        min_multiplier: asNumber(config.min_multiplier) || 0.3
       }
     }
 
     if (config.dip_levels) {
-      dcaConfig.dip_levels = config.dip_levels
-      dcaConfig.reference_price = config.reference_price
-      dcaConfig.reference_period_days = config.reference_period_days
+      dcaConfig.dip_levels = config.dip_levels as DipBuyingLevel[]
+      dcaConfig.reference_price = config.reference_price as number | undefined
+      dcaConfig.reference_period_days = config.reference_period_days as number | undefined
     } else if (strategyType === 'DipBuying') {
       // Provide default dip levels if not specified
       dcaConfig.dip_levels = [
@@ -1592,22 +1600,26 @@ class ApiClient {
         { price_drop_percentage: 10, amount_multiplier: 2.0, max_triggers: undefined },
         { price_drop_percentage: 20, amount_multiplier: 3.0, max_triggers: undefined }
       ]
-      dcaConfig.reference_price = config.reference_price
-      dcaConfig.reference_period_days = config.reference_period_days || 30
+      dcaConfig.reference_price = config.reference_price as number | undefined
+      dcaConfig.reference_period_days = asNumber(config.reference_period_days) || 30
     }
 
     // Risk management settings
-    if (config.max_single_amount) dcaConfig.max_single_amount = config.max_single_amount
-    if (config.min_single_amount) dcaConfig.min_single_amount = config.min_single_amount
-    if (config.max_position_size) dcaConfig.max_position_size = config.max_position_size
-    if (config.bear_market_threshold) dcaConfig.bear_market_threshold = config.bear_market_threshold
+    if (config.max_single_amount) dcaConfig.max_single_amount = asNumber(config.max_single_amount)
+    if (config.min_single_amount) dcaConfig.min_single_amount = asNumber(config.min_single_amount)
+    if (config.max_position_size) dcaConfig.max_position_size = asNumber(config.max_position_size)
+    if (config.bear_market_threshold) dcaConfig.bear_market_threshold = asNumber(config.bear_market_threshold)
 
     return dcaConfig
   }
 
-  private transformGridTradingConfig(config: Record<string, any>): Record<string, any> {
-    const rangePercentage = parseFloat(config.range_percentage || '10')
-    const gridLevels = config.grid_count || 10
+  private transformGridTradingConfig(config: Record<string, unknown>): Record<string, unknown> {
+    const asNumber = (val: unknown): number => typeof val === 'number' ? val : 0
+    const asString = (val: unknown): string => typeof val === 'string' ? val : ''
+
+    const rangePercentageStr = asString(config.range_percentage) || '10'
+    const rangePercentage = parseFloat(rangePercentageStr)
+    const gridLevels = asNumber(config.grid_count) || 10
 
     // Calculate spacing as: (total range) / (number of levels - 1)
     // Total range is 2x rangePercentage (upper + lower)
@@ -1615,9 +1627,18 @@ class ApiClient {
     const totalRangePercentage = rangePercentage * 2
     const spacingPercentage = totalRangePercentage / (gridLevels - 1)
 
+    const investmentAmountStr = asString(config.investment_amount) || '1000'
+    const investmentAmount = parseFloat(investmentAmountStr)
+
+    const stopLossStr = config.stop_loss_percentage ? asString(config.stop_loss_percentage) : null
+    const stopLossPct = stopLossStr ? parseFloat(stopLossStr) : null
+
+    const takeProfitStr = config.take_profit_percentage ? asString(config.take_profit_percentage) : null
+    const takeProfitPct = takeProfitStr ? parseFloat(takeProfitStr) : null
+
     return {
       grid_levels: gridLevels,
-      total_investment: parseFloat(config.investment_amount || '1000'),
+      total_investment: investmentAmount,
       spacing: {
         mode: 'Standard',
         fixed_spacing: spacingPercentage,
@@ -1633,10 +1654,10 @@ class ApiClient {
         use_support_resistance: false
       },
       risk_settings: {
-        max_inventory: parseFloat(config.investment_amount || '1000') * 0.5,
-        stop_loss_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
-        take_profit_pct: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
-        max_drawdown_pct: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : 15.0,
+        max_inventory: investmentAmount * 0.5,
+        stop_loss_pct: stopLossPct,
+        take_profit_pct: takeProfitPct,
+        max_drawdown_pct: stopLossPct || 15.0,
         max_time_in_position: null,
         dynamic_adjustment: true,
         volatility_pause_threshold: null
@@ -1645,47 +1666,53 @@ class ApiClient {
       max_order_size: null,
       enable_rebalancing: true,
       rebalancing_interval: null, // Only rebalance when price exits bounds
-      take_profit_threshold: config.take_profit_percentage ? parseFloat(config.take_profit_percentage) : null,
-      stop_loss_threshold: config.stop_loss_percentage ? parseFloat(config.stop_loss_percentage) : null,
+      take_profit_threshold: takeProfitPct,
+      stop_loss_threshold: stopLossPct,
       market_making: {
         enabled: false,
         spread_pct: 0.2,
         inventory_target: 0.0,
-        max_inventory_deviation: parseFloat(config.investment_amount || '1000') * 0.3,
+        max_inventory_deviation: investmentAmount * 0.3,
         inventory_adjustment: true,
         inventory_skew_factor: 0.1
       }
     }
   }
 
-  private transformSMACrossoverConfig(config: SMACrossoverConfig): SMACrossoverConfig {
+  private transformSMACrossoverConfig(config: StrategyConfig): SMACrossoverConfig {
     // Direct pass-through since frontend now matches backend structure exactly
-    return config
+    return config as SMACrossoverConfig
   }
 
   // Backtesting endpoints
   async runBacktest(data: BacktestRequest): Promise<BacktestEngineResult> {
     // Transform config based on strategy type
-    let transformedConfig = data.config
+    let transformedConfig: Record<string, unknown> = data.config as unknown as Record<string, unknown>
     let stopLossPercentage: number | undefined
     let takeProfitPercentage: number | undefined
 
     switch (data.strategy_type) {
       case 'dca':
-        transformedConfig = this.transformDCAConfig(data.config)
+        transformedConfig = this.transformDCAConfig(data.config as unknown as Record<string, unknown>) as unknown as Record<string, unknown>
         // Extract stop loss and take profit from DCA config if present
-        if ('stop_loss_percentage' in data.config && data.config.stop_loss_percentage) {
-          stopLossPercentage = parseFloat(data.config.stop_loss_percentage.toString())
+        if ('stop_loss_percentage' in data.config) {
+          const dcaConfig = data.config as unknown as Record<string, unknown>
+          if (dcaConfig.stop_loss_percentage) {
+            stopLossPercentage = parseFloat(String(dcaConfig.stop_loss_percentage))
+          }
         }
-        if ('take_profit_percentage' in data.config && data.config.take_profit_percentage) {
-          takeProfitPercentage = parseFloat(data.config.take_profit_percentage.toString())
+        if ('take_profit_percentage' in data.config) {
+          const dcaConfig = data.config as unknown as Record<string, unknown>
+          if (dcaConfig.take_profit_percentage) {
+            takeProfitPercentage = parseFloat(String(dcaConfig.take_profit_percentage))
+          }
         }
         break
       case 'grid_trading':
-        transformedConfig = this.transformGridTradingConfig(data.config)
+        transformedConfig = this.transformGridTradingConfig(data.config as unknown as Record<string, unknown>)
         break
       case 'sma_crossover':
-        transformedConfig = this.transformSMACrossoverConfig(data.config)
+        transformedConfig = this.transformSMACrossoverConfig(data.config) as unknown as Record<string, unknown>
         break
     }
 
@@ -1706,7 +1733,8 @@ class ApiClient {
       strategy_name: strategyNameMap[data.strategy_type] || data.strategy_type,
       strategy_parameters: transformedConfig,
       stop_loss_percentage: stopLossPercentage,
-      take_profit_percentage: takeProfitPercentage
+      take_profit_percentage: takeProfitPercentage,
+      asset_type: data.asset_type || 'crypto' // Default to crypto if not specified
     }
 
     return this.request<BacktestEngineResult>('/backtesting/run', {
@@ -1776,7 +1804,7 @@ class ApiClient {
     })
   }
 
-  async validateStrategyParameters(templateId: string, parameters: Record<string, any>): Promise<{ valid: boolean; issues: string[] }> {
+  async validateStrategyParameters(templateId: string, parameters: Record<string, unknown>): Promise<{ valid: boolean; issues: string[] }> {
     return this.request<{ valid: boolean; issues: string[] }>(`/strategy-templates/${templateId}/validate`, {
       method: 'POST',
       body: JSON.stringify(parameters),

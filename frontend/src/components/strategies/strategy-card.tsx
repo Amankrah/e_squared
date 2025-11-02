@@ -35,9 +35,9 @@ interface StrategyCardProps {
   strategyType: StrategyType
   onEdit?: (strategy: Strategy) => void
   onDelete?: (strategy: Strategy) => void
-  onPause?: (strategy: Strategy) => void
-  onResume?: (strategy: Strategy) => void
-  onExecute?: (strategy: Strategy) => void
+  onPause?: (strategy: Strategy) => Promise<void>
+  onResume?: (strategy: Strategy) => Promise<void>
+  onExecute?: (strategy: Strategy) => Promise<void>
   className?: string
 }
 

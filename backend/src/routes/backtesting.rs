@@ -7,9 +7,10 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::backtesting::{
-    BacktestEngine, BacktestConfig, BacktestRequest, BinanceFetcher,
+    BacktestEngine, BacktestConfig, BacktestRequest, BinanceFetcher, StockFetcher,
     get_cache
 };
+use crate::services::StockDataService;
 use crate::exchange_connectors::KlineInterval;
 use crate::strategies::{list_all_strategies, get_strategy_metadata};
 use crate::utils::errors::AppError;
@@ -22,6 +23,7 @@ pub async fn run_backtest(
     db: web::Data<std::sync::Arc<sea_orm::DatabaseConnection>>,
     req: HttpRequest,
     request: web::Json<BacktestRequest>,
+    stock_service: web::Data<StockDataService>,
 ) -> Result<HttpResponse, AppError> {
     // Get user ID from request extensions (set by auth middleware)
     // First try to get from extensions (if auth middleware set it)
@@ -89,6 +91,7 @@ pub async fn run_backtest(
         stop_loss_percentage: request.stop_loss_percentage,
         take_profit_percentage: request.take_profit_percentage,
         unlimited_capital: is_dca, // Auto-enable for DCA strategies
+        asset_type: request.asset_type.clone(),
     };
 
     // Create backtest name
@@ -155,7 +158,11 @@ pub async fn run_backtest(
 
     // Run backtest
     tracing::debug!("Initializing backtest engine...");
-    let engine = BacktestEngine::new();
+    let engine = if request.asset_type == "stock" {
+        BacktestEngine::new_with_stock_support(stock_service.api_key().to_string())
+    } else {
+        BacktestEngine::new()
+    };
     let start_time = std::time::Instant::now();
 
     tracing::debug!("Starting backtest execution...");
@@ -216,6 +223,7 @@ pub async fn run_backtest(
 pub async fn fetch_historical_data(
     req: HttpRequest,
     query: web::Query<HistoricalDataQuery>,
+    stock_service: web::Data<StockDataService>,
 ) -> Result<HttpResponse, AppError> {
     // Get user ID from request extensions for authentication
     let _user_id = req.extensions()
@@ -238,17 +246,24 @@ pub async fn fetch_historical_data(
     let interval = KlineInterval::from_str(&query.interval)
         .ok_or_else(|| AppError::BadRequest(format!("Invalid interval: {}", query.interval)))?;
 
-    // Fetch data
-    let fetcher = BinanceFetcher::new();
-    let klines = fetcher
-        .fetch_klines(&query.symbol, &interval, start_time, end_time)
-        .await?;
+    // Fetch data based on asset type
+    let klines = match query.asset_type.as_str() {
+        "stock" => {
+            let fetcher = StockFetcher::new(stock_service.api_key().to_string());
+            fetcher.fetch_klines(&query.symbol, &interval, start_time, end_time).await?
+        }
+        "crypto" | _ => {
+            let fetcher = BinanceFetcher::new();
+            fetcher.fetch_klines(&query.symbol, &interval, start_time, end_time).await?
+        }
+    };
 
     Ok(HttpResponse::Ok().json(json!({
         "symbol": query.symbol,
         "interval": query.interval,
         "start_date": query.start_date,
         "end_date": query.end_date,
+        "asset_type": query.asset_type,
         "count": klines.len(),
         "data": klines
     })))
@@ -335,6 +350,8 @@ pub async fn clear_cache(
 /// Get available symbols
 pub async fn get_symbols(
     req: HttpRequest,
+    query: web::Query<AssetTypeQuery>,
+    stock_service: web::Data<StockDataService>,
 ) -> Result<HttpResponse, AppError> {
     // Get user ID from request extensions for authentication
     let _user_id = req.extensions()
@@ -344,12 +361,27 @@ pub async fn get_symbols(
             tracing::error!("User ID not found in request extensions - authentication required");
             AppError::Unauthorized("Authentication required".to_string())
         })?;
-    let fetcher = BinanceFetcher::new();
-    let symbols = fetcher.get_symbols().await?;
+
+    let symbols = match query.asset_type.as_deref().unwrap_or("crypto") {
+        "stock" => {
+            let fetcher = StockFetcher::new(stock_service.api_key().to_string());
+            fetcher.get_symbols().await?
+        }
+        "crypto" | _ => {
+            let fetcher = BinanceFetcher::new();
+            fetcher.get_symbols().await?
+        }
+    };
 
     Ok(HttpResponse::Ok().json(json!({
-        "symbols": symbols
+        "symbols": symbols,
+        "asset_type": query.asset_type.as_deref().unwrap_or("crypto")
     })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssetTypeQuery {
+    pub asset_type: Option<String>,
 }
 
 /// Get available intervals
@@ -429,6 +461,12 @@ pub struct HistoricalDataQuery {
     pub interval: String,
     pub start_date: String,
     pub end_date: String,
+    #[serde(default = "default_asset_type_query")]
+    pub asset_type: String,
+}
+
+fn default_asset_type_query() -> String {
+    "crypto".to_string()
 }
 
 // Backtest result handlers are now in backtest_management module

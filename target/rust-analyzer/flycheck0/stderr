@@ -1,0 +1,31 @@
+    Blocking waiting for file lock on build directory
+  70.963494800s  INFO prepare_target{force=false package_id=e_squared_backend v0.1.0 (C:\Users\Windows\Desktop\Dev_Projects\e_squared\backend) target="e_squared_backend"}: cargo::core::compiler::fingerprint: fingerprint error for e_squared_backend v0.1.0 (C:\Users\Windows\Desktop\Dev_Projects\e_squared\backend)/Check { test: true }/TargetInner { name: "e_squared_backend", doc: true, ..: with_path("C:\\Users\\Windows\\Desktop\\Dev_Projects\\e_squared\\backend\\src\\main.rs", Edition2021) }
+  70.963524000s  INFO prepare_target{force=false package_id=e_squared_backend v0.1.0 (C:\Users\Windows\Desktop\Dev_Projects\e_squared\backend) target="e_squared_backend"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Users\Windows\Desktop\Dev_Projects\e_squared\backend\target\debug\.fingerprint\e_squared_backend-8dd4926012fbed5a\test-bin-e_squared_backend`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_path
+   6: git_filter_source_path
+   7: git_filter_source_path
+   8: git_filter_source_path
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+    Checking e_squared_backend v0.1.0 (C:\Users\Windows\Desktop\Dev_Projects\e_squared\backend)
+error: could not compile `e_squared_backend` (bin "e_squared_backend" test) due to 2 previous errors; 45 warnings emitted
